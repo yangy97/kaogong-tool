@@ -2,9 +2,8 @@
 
 面向公务员考试备考的 **题目生成 + 双平台发布** 工具。支持公共数据实时出题、AI 按考点命题、700 高频词练习，并一键准备小红书 / 抖音图文素材。
 
-![首页示意](./docs/images/home.png)
+![首页](./docs/images/home.png)
 
-> 若图片未显示，请先按 [docs/images/README.md](./docs/images/README.md) 补充截图。
 
 ---
 
@@ -105,13 +104,11 @@ cp .env.example .env
 
 生成过程中可点击 **「取消生成」** 中止 AI 请求（流式模式，可节省 token）。
 
-![Loading](./docs/images/generate-loading.png)
-
 ### 2. 700 高频词
 
 切换到「700 高频词」Tab，按分类浏览或随机抽题，同样支持发布流程。
 
-![700词](./docs/images/vocab.png)
+![700词](./docs/images/700word.png)
 
 ### 3. 发布到小红书 / 抖音
 
@@ -202,24 +199,6 @@ npm run build    # 生产构建
 npm run preview  # 预览构建结果
 ```
 
----
-
-## 常见问题
-
-**Q: 配置了 Key 但 AI 选项还是灰色？**  
-A: Key 要写在 `server/.env`（不是 `.env.example`），重启 `npm run dev`。
-
-**Q: OpenAI 需要单独配置吗？**  
-A: 需要。DeepSeek 的 Key 不能用于 OpenAI，需在 `.env` 单独填 `OPENAI_API_KEY`。
-
-**Q: 点击生成立刻取消？**  
-A: 确保前后端都已更新到最新代码并重启服务。
-
-**Q: `.env` 会被上传到 Git 吗？**  
-A: 不会，已在 `.gitignore` 中忽略。
-
----
-
 ## License
 
-MIT · 品牌标识 🐑🍊
+MIT · 小杨 🐑🍊
