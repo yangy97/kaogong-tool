@@ -286,12 +286,15 @@ export function buildAiPrompt(
     ? `
 【解析风格 · ${expert.name}】
 ${expert.stylePrompt}
-- analysis 必须以「${expert.analysisPrefix}」开头
-- 用 ${expert.name} 的标志性方法与话术讲解，2-4 句话，不超过 200 字
-- 可点出「坑点」「秒杀点」「易错项」，但禁止输出思考/试算过程`
+- analysis 直接输出最终精简版（后端不会裁剪），以「${expert.analysisPrefix}」开头，1-2 句 ≤80 字，末尾「选X」
+- 只用 ${expert.name} 一种套路；禁止「实际计算/秒杀点/注意」等分段；禁止质疑题干`
     : `
-- analysis 字段：仅写最终解题结论和关键公式，1-3 句话，不超过 120 字
-- 禁止在 analysis / stem 中出现：思考过程、试算、调整数字、自我质疑、「可能」「重新考虑」「完美」等措辞`
+- analysis 直接输出最终精简版：1-2 句，公式/结论+「选X」，≤80 字
+- 禁止思考过程、试算、多种方法对比`
+
+  const analysisExample = expert
+    ? `${expert.analysisPrefix}增长量≈80%×2%÷1.12≈1.4%，选A。`
+    : '增长率=(现-基)/基≈8%，选B。'
 
   return `你是资深公务员考试命题专家。请为「${module.name}」（${module.category}）生成 ${count} 道${DIFFICULTY_LABELS[difficulty] ?? difficulty}难度题目。
 ${topicHint}
@@ -313,7 +316,7 @@ ${expertHint}
     "stem": "题干（完整、可直接作答的最终版本）",
     "options": [{"key":"A","text":"..."},{"key":"B","text":"..."},{"key":"C","text":"..."},{"key":"D","text":"..."}],
     "answer": "A",
-    "analysis": "解析${expert ? `（${expert.analysisPrefix}开头，${expert.name}风格）` : '（仅结论+公式，无思考过程）'}",
+    "analysis": "${analysisExample}",
     "difficulty": "${difficulty}"
   }
 ]

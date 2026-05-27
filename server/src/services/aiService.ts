@@ -22,52 +22,23 @@ function parseAiResponse(text: string, expertPrefix?: string): AiQuestionRaw[] {
   if (!Array.isArray(parsed)) throw new Error('AI 返回格式不是数组')
   return parsed.map((q) => ({
     ...q,
-    analysis: cleanAnalysis(q.analysis ?? '', expertPrefix),
-    stem: cleanStem(q.stem ?? ''),
+    analysis: normalizeAnalysis(q.analysis ?? '', expertPrefix),
+    stem: normalizeStem(q.stem ?? ''),
   }))
 }
 
-/** 去掉 AI 思考过程、试算草稿，保留名师风格前缀 */
-function cleanAnalysis(text: string, expertPrefix?: string): string {
-  const prefixMatch = text.match(/^【[^】]+】/)
-  const prefix = prefixMatch?.[0] ?? expertPrefix ?? ''
-  let s = text.replace(/^【[^】]+】\s*/, '').replace(/\s+/g, ' ').trim()
-  if (!s) return prefix ? `${prefix} 详见答案。` : '详见答案。'
-
-  const maxLen = prefix ? 220 : 180
-
-  // 遇到命题草稿/试算段落，截断其后内容
-  const truncateAt = ['因此第', '因此，第', '第三题修改为', '调整数字', '试算', '重新考虑', '计算错误？']
-  for (const m of truncateAt) {
-    const idx = s.indexOf(m)
-    if (idx >= 0) s = s.slice(0, idx).trim()
+/** 仅规范化空白；解析内容由 AI prompt 直接约束，不在后端裁剪改写 */
+function normalizeAnalysis(text: string, expertPrefix?: string): string {
+  const s = text.replace(/\s+/g, ' ').trim()
+  if (!s) return expertPrefix ? `${expertPrefix} 详见答案。` : '详见答案。'
+  if (expertPrefix && !/^【[^】]+】/.test(s)) {
+    return `${expertPrefix} ${s}`
   }
-
-  // 去掉常见思考口吻句子
-  s = s
-    .replace(/可能我[^。]*。/g, '')
-    .replace(/不对[，,][^。]*。/g, '')
-    .replace(/(?:重新|再)试[^。]*。/g, '')
-    .replace(/完美[。！]?/g, '')
-    .trim()
-
-  // 取含公式/结论的句子（优先短句）
-  const sentences = s.split(/[。！？]/).map((x) => x.trim()).filter((x) => x.length > 4)
-  const preferred = sentences.filter((x) =>
-    /[=≈%倍]|增长率|比重|答案|选|故|因此|所以|公式|间隔|增量|秒杀|放缩|坑|突破口|口诀|代入|排除/.test(x),
-  )
-  const picked = (preferred.length ? preferred : sentences).slice(-3).join('。')
-  let result = (picked || s).slice(0, maxLen)
-  if (!result) return prefix ? `${prefix} 详见答案。` : '详见答案。'
-  if (!result.endsWith('。')) result = `${result}。`
-  return prefix ? `${prefix} ${result}` : result
+  return s
 }
 
-function cleanStem(text: string): string {
-  // 题干若混入「修改为」草稿，取最后一句问句
-  if (!/修改为/.test(text)) return text
-  const parts = text.split(/[。！？]/).filter(Boolean)
-  return parts[parts.length - 1]?.includes('？') ? parts[parts.length - 1]! : text
+function normalizeStem(text: string): string {
+  return text.replace(/\s+/g, ' ').trim()
 }
 
 function isDeepSeekApi(baseUrl: string): boolean {
@@ -166,20 +137,21 @@ export async function generateViaAi(
     devLog('AI', 'expert:', expert?.name ?? '（通用）')
   })
 
-  const systemContent = expert
-    ? buildExpertSystemPrompt(expert)
-    : '你是公考命题专家。直接输出最终结果，禁止输出思考过程、试算、自我纠错、调整数字等中间步骤。解析仅写结论和关键公式，1-3句话。'
-
   const body: Record<string, unknown> = {
-      model,
-      temperature: 0.7,
-      stream: true,
-      stream_options: { include_usage: true },
-      messages: [
-        { role: 'system', content: systemContent },
-        { role: 'user', content: buildAiPrompt(module, count, difficulty, topic, expert) },
-      ],
-    }
+    model,
+    temperature: 0.5,
+    stream: true,
+    stream_options: { include_usage: true },
+    messages: [
+      {
+        role: 'system',
+        content: expert
+          ? buildExpertSystemPrompt(expert)
+          : '你是公考命题专家。analysis 直接输出最终精简版：1-2 句，公式/结论+选X，≤80 字。禁止思考过程、试算、多种方法对比。后端不会改写你的 analysis。',
+      },
+      { role: 'user', content: buildAiPrompt(module, count, difficulty, topic, expert) },
+    ],
+  }
 
   // DeepSeek V4 默认开启思考模式，需显式关闭，避免思考链混入解析
   if (isDeepSeekApi(baseUrl)) {

@@ -19,7 +19,7 @@ export const EXAM_EXPERTS: ExamExpert[] = [
     modules: ['shuliang', 'ziliao'],
     specialty: '数量·资料速算',
     analysisPrefix: '【花生十三·速算思路】',
-    stylePrompt: `解析须模仿「花生十三」风格：善用假设法、特值法、115 求和法、避坑技巧；资料分析强调首数/尾数、分数比较口诀；数量题优先找整除、比例、代入验证；语言简练、步骤清晰，点出「坑点」与「秒杀点」。`,
+    stylePrompt: `只用「花生十三」最快的一种套路（假设法/特值法/115法/首数尾数之一），1-2 句直达答案。可写关键公式与结果，禁止列多种算法、禁止写「实际计算」「秒杀点」「注意」等分段标题。`,
   },
   {
     id: 'gaozhao',
@@ -27,7 +27,7 @@ export const EXAM_EXPERTS: ExamExpert[] = [
     modules: ['ziliao'],
     specialty: '资料分析放缩',
     analysisPrefix: '【高照·资料速解】',
-    stylePrompt: `解析须模仿「高照」风格：资料分析以放缩估算、截位直除、3+2 速算为核心；先判题型再选公式；强调「看选项定精度」；步骤短、数字好算，突出速算路径而非冗长推导。`,
+    stylePrompt: `只用「高照」放缩/截位直除/3+2 速算中的一种，1-2 句直达答案。先点公式再写估算结果，禁止多种方法对比和冗长竖式。`,
   },
   {
     id: 'niejia',
@@ -35,7 +35,7 @@ export const EXAM_EXPERTS: ExamExpert[] = [
     modules: ['panduan'],
     specialty: '判断推理',
     analysisPrefix: '【聂佳·判断思路】',
-    stylePrompt: `解析须模仿「聂佳」风格：图形推理先定方向（位置/样式/数量/对称等）；定义判断抓关键词一一对应；类比推理先定关系再二级辨析；逻辑判断画关系/找矛盾；结论明确，点出「突破口」。`,
+    stylePrompt: `只用「聂佳」一种判断套路，1-2 句说明突破口并给出选项。禁止分点罗列多种思路。`,
   },
   {
     id: 'longfei',
@@ -43,7 +43,7 @@ export const EXAM_EXPERTS: ExamExpert[] = [
     modules: ['panduan'],
     specialty: '图形·定义',
     analysisPrefix: '【龙飞·推理思路】',
-    stylePrompt: `解析须模仿「龙飞」风格：图形推理强调元素组成与规律分类；定义判断用「主体-客体-目的-方式」拆解；语言口语化、好记；给出「一眼看出」的关键特征。`,
+    stylePrompt: `只用「龙飞」一种拆解法，1-2 句点关键特征并选答案。禁止展开多种规律假设。`,
   },
   {
     id: 'alimujiang',
@@ -51,7 +51,7 @@ export const EXAM_EXPERTS: ExamExpert[] = [
     modules: ['yanyu'],
     specialty: '言语理解',
     analysisPrefix: '【阿里木江·言语思路】',
-    stylePrompt: `解析须模仿「阿里木江」风格：逻辑填空看语境呼应与搭配；片段阅读抓中心句/转折词/并列结构；排除法优先；解析点出「为什么错、为什么对」，避免空泛。`,
+    stylePrompt: `只用「阿里木江」一种排除/定位法，1-2 句说明为何选该答案。禁止空泛点评。`,
   },
   {
     id: 'guoxi',
@@ -59,7 +59,7 @@ export const EXAM_EXPERTS: ExamExpert[] = [
     modules: ['yanyu'],
     specialty: '行文脉络',
     analysisPrefix: '【郭熙·言语思路】',
-    stylePrompt: `解析须模仿「郭熙」风格：主旨题找行文脉络（总分/分总/转折/因果）；细节题回原文定位；语句表达看话题一致与衔接；解析强调结构分析而非语感。`,
+    stylePrompt: `只用「郭熙」行文脉络/定位法一种，1-2 句点结构并选答案。`,
   },
   {
     id: 'limengjiao',
@@ -67,7 +67,7 @@ export const EXAM_EXPERTS: ExamExpert[] = [
     modules: ['changshi'],
     specialty: '常识口诀',
     analysisPrefix: '【李梦娇·常识思路】',
-    stylePrompt: `解析须模仿「李梦娇」风格：常识题用口诀、易混点对比、关键词记忆；政治法律经济科技人文各板块点出高频考点；解析短、好背、强调「易错点」。`,
+    stylePrompt: `只用「李梦娇」口诀/易混点对比一种，1-2 句点考点并选答案。`,
   },
   {
     id: 'liuwenchao',
@@ -75,7 +75,7 @@ export const EXAM_EXPERTS: ExamExpert[] = [
     modules: ['shuliang'],
     specialty: '数量秒杀',
     analysisPrefix: '【刘文超·数量思路】',
-    stylePrompt: `解析须模仿「刘文超」风格：数量题优先代入排除、倍数特性、奇偶性；工程/行程/利润问题用比例法；步骤少、强调「看选项猜答案再验证」。`,
+    stylePrompt: `只用「刘文超」代入/倍数/比例法一种，1-2 句秒杀并选答案。禁止完整演算。`,
   },
   {
     id: 'bailu',
@@ -83,7 +83,7 @@ export const EXAM_EXPERTS: ExamExpert[] = [
     modules: ['shenlun'],
     specialty: '申论答题',
     analysisPrefix: '【白鹭·申论思路】',
-    stylePrompt: `解析须模仿「白鹭」申论风格：归纳概括「找点+分类+简练」；综合分析「是什么-为什么-怎么办」；对策题「主体+手段+目的」；语言规范、条理清晰，给出可操作的答题框架。`,
+    stylePrompt: `只用「白鹭」一种答题框架，1-2 句列要点方向。禁止长篇展开。`,
   },
 ]
 
@@ -104,5 +104,12 @@ export function getExpertsForModule(moduleId: string): Array<ExamExpert & { reco
 }
 
 export function buildExpertSystemPrompt(expert: ExamExpert): string {
-  return `你是公考命题与解析专家，解析部分必须严格采用「${expert.name}」的解题思维与表达习惯。${expert.stylePrompt} 直接输出最终结果，禁止思考过程、试算、自我纠错。解析开头必须带「${expert.analysisPrefix}」。`
+  return `你是公考命题专家。analysis 必须模仿「${expert.name}」的解题习惯：${expert.stylePrompt}
+
+输出即最终版，后端不会改写 analysis。请直接写出考生能看的精简解析：
+- 只用一种最快方法，1-2 句，总长 ≤80 字
+- 必须以「${expert.analysisPrefix}」开头，末尾写「选X」
+- 示例：${expert.analysisPrefix}增长量≈80%×2%÷1.12≈1.4%，选A。
+
+严禁：多种算法对比、「实际计算/秒杀点/注意」分段标题、质疑题干、自我纠错、试算草稿。`
 }
