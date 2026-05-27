@@ -103,6 +103,9 @@ cp .env.example .env
 ![AI 提供商下拉](./docs/images/ai-provider.png)
 
 生成过程中可点击 **「取消生成」** 中止 AI 请求（流式模式，可节省 token）。
+**解析风格：**
+根据对应的模块 选择ai出问题以及解析的名师 
+![名师](./docs/images/mingshi.png)
 
 ### 2. 700 高频词
 

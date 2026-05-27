@@ -271,6 +271,7 @@ export function buildAiPrompt(
   count: number,
   difficulty: string,
   topic?: ExamPoint,
+  expert?: { name: string; analysisPrefix: string; stylePrompt: string },
 ): string {
   const typeHint =
     module.id === 'shenlun'
@@ -280,6 +281,17 @@ export function buildAiPrompt(
   const topicHint = topic
     ? `本次命制考点：「${topic.name}」（${topic.description}），所有题目必须紧扣该考点。`
     : ''
+
+  const expertHint = expert
+    ? `
+【解析风格 · ${expert.name}】
+${expert.stylePrompt}
+- analysis 必须以「${expert.analysisPrefix}」开头
+- 用 ${expert.name} 的标志性方法与话术讲解，2-4 句话，不超过 200 字
+- 可点出「坑点」「秒杀点」「易错项」，但禁止输出思考/试算过程`
+    : `
+- analysis 字段：仅写最终解题结论和关键公式，1-3 句话，不超过 120 字
+- 禁止在 analysis / stem 中出现：思考过程、试算、调整数字、自我质疑、「可能」「重新考虑」「完美」等措辞`
 
   return `你是资深公务员考试命题专家。请为「${module.name}」（${module.category}）生成 ${count} 道${DIFFICULTY_LABELS[difficulty] ?? difficulty}难度题目。
 ${topicHint}
@@ -291,8 +303,7 @@ ${topicHint}
 
 【重要】输出规范：
 - 只输出 JSON，不要任何解释性文字
-- analysis 字段：仅写最终解题结论和关键公式，1-3 句话，不超过 120 字
-- 禁止在 analysis / stem 中出现：思考过程、试算、调整数字、自我质疑、「可能」「重新考虑」「完美」等措辞
+${expertHint}
 - 禁止输出命题草稿或多版修改过程
 
 严格返回 JSON 数组，不要 markdown 代码块，格式如下：
@@ -302,7 +313,7 @@ ${topicHint}
     "stem": "题干（完整、可直接作答的最终版本）",
     "options": [{"key":"A","text":"..."},{"key":"B","text":"..."},{"key":"C","text":"..."},{"key":"D","text":"..."}],
     "answer": "A",
-    "analysis": "解析（仅结论+公式，无思考过程）",
+    "analysis": "解析${expert ? `（${expert.analysisPrefix}开头，${expert.name}风格）` : '（仅结论+公式，无思考过程）'}",
     "difficulty": "${difficulty}"
   }
 ]

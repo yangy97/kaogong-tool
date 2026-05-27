@@ -7,6 +7,7 @@ import {
   getPointsByModule,
 } from '../constants.js'
 import { generateQuestions } from '../services/questionService.js'
+import { getExpertsForModule } from '../data/expertStyles.js'
 import { getAiConfig, resolveGenerationMode, getAllProviders, isAnyAiConfigured, getDefaultProviderId } from '../config/aiConfig.js'
 import { devGroup, devLog, isDevMode, preview } from '../utils/devLog.js'
 import { isAbortError } from '../utils/abort.js'
@@ -45,6 +46,15 @@ router.get('/topics/:moduleId', (req, res) => {
   res.json({ topics: getPointsByModule(moduleId) })
 })
 
+router.get('/experts/:moduleId', (req, res) => {
+  const { moduleId } = req.params
+  if (!MODULE_MAP[moduleId]) {
+    res.status(404).json({ error: '模块不存在' })
+    return
+  }
+  res.json({ experts: getExpertsForModule(moduleId) })
+})
+
 router.post('/generate', async (req, res) => {
   const started = Date.now()
   const abortController = new AbortController()
@@ -59,10 +69,10 @@ router.post('/generate', async (req, res) => {
   req.on('aborted', onAborted)
 
   try {
-    const { moduleId, topicId, count = 3, difficulty = 'medium', generationMode, aiModel, aiProvider } = req.body ?? {}
+    const { moduleId, topicId, count = 3, difficulty = 'medium', generationMode, aiModel, aiProvider, expertId } = req.body ?? {}
 
     devGroup('POST /questions/generate', () => {
-      devLog('generate', '请求参数:', { moduleId, topicId, count, difficulty, generationMode, aiProvider, aiModel })
+      devLog('generate', '请求参数:', { moduleId, topicId, count, difficulty, generationMode, aiProvider, aiModel, expertId })
     })
 
     if (!moduleId || !MODULE_MAP[moduleId]) {
@@ -107,6 +117,7 @@ router.post('/generate', async (req, res) => {
         generationMode: mode,
         aiProvider: typeof aiProvider === 'string' ? aiProvider : aiConfig.providerId,
         aiModel: typeof aiModel === 'string' ? aiModel : undefined,
+        expertId: typeof expertId === 'string' ? expertId : undefined,
         signal: abortController.signal,
       },
     )

@@ -30,6 +30,8 @@ export interface Question {
   answer: string
   analysis: string
   difficulty: 'easy' | 'medium' | 'hard'
+  expertTag?: string
+  tags?: string[]
 }
 
 export interface VocabItem {
@@ -73,6 +75,15 @@ export interface AiProviderOption {
   models: AiModelOption[]
 }
 
+export interface ExamExpert {
+  id: string
+  name: string
+  modules: string[]
+  specialty: string
+  analysisPrefix: string
+  recommended?: boolean
+}
+
 export interface GenerateRequest {
   moduleId: string
   topicId?: string
@@ -81,6 +92,7 @@ export interface GenerateRequest {
   generationMode?: GenerationMode
   aiProvider?: AiProviderId
   aiModel?: string
+  expertId?: string
 }
 
 export interface XhsPostContent {

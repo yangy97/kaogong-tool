@@ -7,11 +7,13 @@ import VocabPanel from '@/components/VocabPanel.vue'
 import QuestionCard from '@/components/QuestionCard.vue'
 import PublishPanel from '@/components/PublishPanel.vue'
 import ImageGallery from '@/components/ImageGallery.vue'
-import LoadingOverlay from '@/components/LoadingOverlay.vue'
+import FormSelect from '@/components/FormSelect.vue'
+import type { SelectGroup, SelectOption } from '@/components/FormSelect.vue'
 import type {
   AiProviderId,
   AiProviderOption,
   AppMode,
+  ExamExpert,
   ExamModule,
   ExamPoint,
   GenerationMode,
@@ -63,6 +65,9 @@ const selectedAiProvider = ref<AiProviderId>('deepseek')
 const aiModel = ref('')
 const activeAiModel = ref('')
 const activeAiProvider = ref('')
+const activeExpertTag = ref('')
+const experts = ref<ExamExpert[]>([])
+const selectedExpertId = ref('none')
 const generationMode = ref<GenerationMode>('public')
 const toast = ref('')
 const xhsImages = ref<GeneratedImage[]>([])
@@ -114,7 +119,10 @@ const sourceLabel = computed(() => {
   if (source.value === 'ai') {
     const p = aiProviders.value.find((x) => x.id === (activeAiProvider.value as AiProviderId))
     const tag = p?.name ? `${p.name}/` : ''
-    return activeAiModel.value ? `AI 生成 (${tag}${activeAiModel.value})` : 'AI 实时生成'
+    const expert = activeExpertTag.value ? ` · ${activeExpertTag.value}解析` : ''
+    return activeAiModel.value
+      ? `AI 生成 (${tag}${activeAiModel.value}${expert})`
+      : `AI 实时生成${expert}`
   }
   if (sourceMode.value === 'public-api-ai-hybrid') return '公共数据 + AI 补全'
   if (source.value === 'public-api') return '公共数据接口'
@@ -130,7 +138,84 @@ const currentProvider = computed(() =>
   aiProviders.value.find((p) => p.id === selectedAiProvider.value),
 )
 
-const aiModels = computed(() => currentProvider.value?.models ?? [])
+const recommendedExperts = computed(() =>
+  experts.value.filter((e) => e.recommended !== false),
+)
+
+const otherExperts = computed(() =>
+  experts.value.filter((e) => e.recommended === false),
+)
+
+const countOptions = computed<SelectOption[]>(() =>
+  Array.from({ length: 10 }, (_, i) => ({ value: i + 1, label: `${i + 1} 道` })),
+)
+
+const difficultyOptions: SelectOption[] = [
+  { value: 'easy', label: '简单' },
+  { value: 'medium', label: '中等' },
+  { value: 'hard', label: '困难' },
+]
+
+const generationModeOptions = computed<SelectOption[]>(() => [
+  { value: 'public', label: '公共数据（默认）' },
+  { value: 'ai', label: 'AI 命题', disabled: !aiConfigured.value },
+  { value: 'hybrid', label: '混合（公共 + AI 补全）', disabled: !aiConfigured.value },
+])
+
+const aiProviderOptions = computed<SelectOption[]>(() =>
+  aiProviders.value.map((p) => ({
+    value: p.id,
+    label: p.configured ? p.name : `${p.name}（未配置 Key）`,
+    disabled: !p.configured,
+  })),
+)
+
+const aiModelOptions = computed<SelectOption[]>(() =>
+  (currentProvider.value?.models ?? []).map((m) => ({
+    value: m.id,
+    label: m.label,
+  })),
+)
+
+const expertSelectGroups = computed<SelectGroup[]>(() => {
+  const groups: SelectGroup[] = [
+    {
+      label: '解析方式',
+      options: [{ value: 'none', label: '通用解析（不指定名师）' }],
+    },
+  ]
+  if (recommendedExperts.value.length) {
+    groups.push({
+      label: '推荐（本模块擅长）',
+      options: recommendedExperts.value.map((e) => ({
+        value: e.id,
+        label: `${e.name} · ${e.specialty}`,
+      })),
+    })
+  }
+  if (otherExperts.value.length) {
+    groups.push({
+      label: '其他名师',
+      options: otherExperts.value.map((e) => ({
+        value: e.id,
+        label: `${e.name} · ${e.specialty}`,
+      })),
+    })
+  }
+  return groups
+})
+
+async function loadExperts(moduleId: string) {
+  try {
+    const res = await api.getExperts(moduleId)
+    experts.value = res.experts
+    const recommended = res.experts.find((e) => e.recommended)
+    selectedExpertId.value = recommended?.id ?? 'none'
+  } catch {
+    experts.value = []
+    selectedExpertId.value = 'none'
+  }
+}
 
 const configuredProviderHint = computed(() => {
   const names = aiProviders.value.filter((p) => p.configured).map((p) => p.name)
@@ -142,8 +227,9 @@ watch(selectedAiProvider, (id) => {
   if (p?.configured) aiModel.value = p.defaultModel
 })
 
-watch(selectedModuleId, () => {
+watch(selectedModuleId, (id) => {
   selectedTopicId.value = ''
+  loadExperts(id)
 })
 
 watch(appMode, (mode) => {
@@ -185,6 +271,7 @@ onMounted(async () => {
     selectedAiProvider.value =
       firstConfigured?.id ?? aiCfg?.defaultProviderId ?? health.defaultProviderId ?? 'deepseek'
     aiModel.value = firstConfigured?.defaultModel ?? aiCfg?.defaultModel ?? ''
+    await loadExperts(selectedModuleId.value)
     await loadVocabList()
   } catch {
     showToast('无法连接后端，请确认 server 已启动')
@@ -245,12 +332,14 @@ async function handleGenerate() {
       generationMode: generationMode.value,
       aiProvider: selectedAiProvider.value,
       aiModel: showAiOptions.value && aiModel.value ? aiModel.value : undefined,
+      expertId: showAiOptions.value && selectedExpertId.value !== 'none' ? selectedExpertId.value : undefined,
     }, { signal })
     questions.value = res.questions
     source.value = res.source
     sourceMode.value = res.mode ?? ''
     activeAiModel.value = res.aiModel ?? ''
     activeAiProvider.value = res.aiProvider ?? selectedAiProvider.value
+    activeExpertTag.value = res.expertTag ?? questions.value.find((q) => q.expertTag)?.expertTag ?? ''
 
     setLoading('正在准备发布文案…', '即将完成，也可取消')
     const xhs = await api.prepareXhs(res.questions, { signal })
@@ -436,49 +525,55 @@ async function handleCopyDouyin() {
             @select="selectedTopicId = $event"
           />
           <div class="controls">
-            <label>
-              题目数量
-              <select v-model.number="count" :disabled="loading">
-                <option v-for="n in 10" :key="n" :value="n">{{ n }} 道</option>
-              </select>
-            </label>
-            <label>
-              难度
-              <select v-model="difficulty" :disabled="loading">
-                <option value="easy">简单</option>
-                <option value="medium">中等</option>
-                <option value="hard">困难</option>
-              </select>
-            </label>
-            <label>
-              出题方式
-              <select v-model="generationMode" :disabled="loading">
-                <option value="public">公共数据（默认）</option>
-                <option value="ai" :disabled="!aiConfigured">AI 命题</option>
-                <option value="hybrid" :disabled="!aiConfigured">混合（公共 + AI 补全）</option>
-              </select>
-            </label>
-            <label v-if="showAiOptions">
-              AI 提供商
-              <select v-model="selectedAiProvider" :disabled="loading">
-                <option
-                  v-for="p in aiProviders"
-                  :key="p.id"
-                  :value="p.id"
-                  :disabled="!p.configured"
-                >
-                  {{ p.name }}{{ p.configured ? '' : '（未配置 Key）' }}
-                </option>
-              </select>
-            </label>
-            <label v-if="showAiOptions">
-              AI 模型
-              <select v-model="aiModel" :disabled="loading || !currentProvider?.configured">
-                <option v-for="m in aiModels" :key="m.id" :value="m.id">
-                  {{ m.label }}
-                </option>
-              </select>
-            </label>
+            <div class="controls-basic">
+              <label class="control-field">
+                <span class="control-label">题目数量</span>
+                <FormSelect v-model="count" :options="countOptions" :disabled="loading" />
+              </label>
+              <label class="control-field">
+                <span class="control-label">难度</span>
+                <FormSelect v-model="difficulty" :options="difficultyOptions" :disabled="loading" />
+              </label>
+              <label class="control-field control-field--wide">
+                <span class="control-label">出题方式</span>
+                <FormSelect
+                  v-model="generationMode"
+                  :options="generationModeOptions"
+                  :disabled="loading"
+                />
+              </label>
+            </div>
+
+            <div v-if="showAiOptions" class="controls-ai">
+              <span class="controls-ai-title">AI 设置</span>
+              <div class="controls-ai-grid">
+                <label class="control-field">
+                  <span class="control-label">AI 提供商</span>
+                  <FormSelect
+                    v-model="selectedAiProvider"
+                    :options="aiProviderOptions"
+                    :disabled="loading"
+                  />
+                </label>
+                <label class="control-field control-field--wide">
+                  <span class="control-label">AI 模型</span>
+                  <FormSelect
+                    v-model="aiModel"
+                    :options="aiModelOptions"
+                    :disabled="loading || !currentProvider?.configured"
+                  />
+                </label>
+                <label class="control-field control-field--full">
+                  <span class="control-label">解析风格</span>
+                  <FormSelect
+                    v-model="selectedExpertId"
+                    :groups="expertSelectGroups"
+                    :disabled="loading"
+                  />
+                </label>
+              </div>
+            </div>
+
             <button class="generate-btn" :disabled="loading" @click="handleGenerate">
               <span v-if="loading" class="btn-spinner" />
               {{ loading ? '生成中…' : '✨ 按考点生成题目' }}
@@ -500,11 +595,9 @@ async function handleCopyDouyin() {
           @generate="handleVocabGenerate"
         />
         <div class="controls vocab-controls">
-          <label>
-            题目数量
-            <select v-model.number="count" :disabled="loading">
-              <option v-for="n in 10" :key="n" :value="n">{{ n }} 道</option>
-            </select>
+          <label class="control-field">
+            <span class="control-label">题目数量</span>
+            <FormSelect v-model="count" :options="countOptions" :disabled="loading" />
           </label>
         </div>
       </template>
@@ -662,39 +755,87 @@ h1 {
 
 .controls {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: 16px;
   margin-top: 20px;
-  flex-wrap: wrap;
 }
 
-.controls label {
+.controls-basic {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.controls-ai {
+  padding: 14px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.controls-ai-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.controls-ai-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.control-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 14px;
-  color: var(--text-secondary);
+  min-width: 0;
 }
 
-.controls select {
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 15px;
-  min-width: 100px;
+.control-field--wide {
+  grid-column: span 1;
+}
+
+.control-field--full {
+  grid-column: 1 / -1;
+}
+
+.control-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .generate-btn {
+  align-self: flex-start;
   padding: 10px 28px;
   background: var(--primary);
   color: #fff;
   border-radius: 8px;
   font-size: 16px;
   font-weight: 600;
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .controls-basic,
+  .controls-ai-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .control-field--wide,
+  .control-field--full {
+    grid-column: auto;
+  }
+
+  .generate-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .generate-btn:hover:not(:disabled) {

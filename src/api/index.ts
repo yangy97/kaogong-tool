@@ -51,6 +51,9 @@ export const api = {
   getTopics: (moduleId: string) =>
     request<{ topics: import('@/types').ExamPoint[] }>(`/questions/topics/${moduleId}`),
 
+  getExperts: (moduleId: string) =>
+    request<{ experts: import('@/types').ExamExpert[] }>(`/questions/experts/${moduleId}`),
+
   generateQuestions: (
     body: import('@/types').GenerateRequest,
     opts?: { signal?: AbortSignal },
@@ -64,6 +67,7 @@ export const api = {
       generationMode?: import('@/types').GenerationMode
       aiProvider?: import('@/types').AiProviderId
       aiModel?: string
+      expertTag?: string
       _meta?: {
         durationMs: number
         source: string

@@ -775,9 +775,10 @@ export async function generateQuestions(
     generationMode?: GenerationMode
     aiProvider?: AiProviderId | string
     aiModel?: string
+    expertId?: string
     signal?: AbortSignal
   },
-): Promise<GenerateResult & { aiModel?: string; aiProvider?: string }> {
+): Promise<GenerateResult & { aiModel?: string; aiProvider?: string; expertTag?: string }> {
   const aiConfig = getAiConfig({
     providerId: options?.aiProvider,
     modelOverride: options?.aiModel,
@@ -792,11 +793,11 @@ export async function generateQuestions(
   // 纯 AI 模式
   if (generationMode === 'ai' && aiConfig.configured) {
     try {
-      const { questions, model, providerId } = await generateViaAi(
+      const { questions, model, providerId, expertTag } = await generateViaAi(
         module, count, difficulty, topic,
-        { providerId: options?.aiProvider, modelOverride: options?.aiModel, signal },
+        { providerId: options?.aiProvider, modelOverride: options?.aiModel, expertId: options?.expertId, signal },
       )
-      return { questions, source: 'ai', mode: 'ai', aiModel: model, aiProvider: providerId }
+      return { questions, source: 'ai', mode: 'ai', aiModel: model, aiProvider: providerId, expertTag }
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') throw e
       console.warn('[AI] 失败，回退公共数据:', e)
@@ -817,9 +818,9 @@ export async function generateQuestions(
     if (needAi > 0) {
       try {
         throwIfAborted(signal)
-        const { questions: aiQuestions, model, providerId } = await generateViaAi(
+        const { questions: aiQuestions, model, providerId, expertTag } = await generateViaAi(
           module, needAi, difficulty, topic,
-          { providerId: options?.aiProvider, modelOverride: options?.aiModel, signal },
+          { providerId: options?.aiProvider, modelOverride: options?.aiModel, expertId: options?.expertId, signal },
         )
         const merged = [...publicOnly, ...aiQuestions].slice(0, count)
         return {
@@ -828,6 +829,7 @@ export async function generateQuestions(
           mode: publicOnly.length > 0 ? 'public-api-ai-hybrid' : 'ai',
           aiModel: model,
           aiProvider: providerId,
+          expertTag,
         }
       } catch (e) {
         if (e instanceof Error && e.name === 'AbortError') throw e

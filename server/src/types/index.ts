@@ -29,6 +29,9 @@ export interface Question {
   answer: string
   analysis: string
   difficulty: 'easy' | 'medium' | 'hard'
+  /** AI 解析风格对应的名师标签 */
+  expertTag?: string
+  tags?: string[]
 }
 
 export interface VocabItem {

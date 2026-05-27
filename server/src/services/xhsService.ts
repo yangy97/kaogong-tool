@@ -22,6 +22,15 @@ function formatQuestionBlock(q: Question, index: number): string {
   return block
 }
 
+function collectExpertTags(questions: Question[]): string[] {
+  const set = new Set<string>()
+  for (const q of questions) {
+    if (q.expertTag) set.add(q.expertTag)
+    q.tags?.forEach((t) => set.add(t))
+  }
+  return [...set]
+}
+
 export function buildXhsPost(questions: Question[]): XhsPostContent {
   const moduleName = questions[0]?.moduleName ?? '考公'
   const count = questions.length
@@ -35,9 +44,11 @@ export function buildXhsPost(questions: Question[]): XhsPostContent {
 
   const body = intro + bodyParts.join('\n') + outro
 
+  const expertTags = collectExpertTags(questions)
   const tags = [
     ...DEFAULT_TAGS,
     moduleName.replace(/与/g, ''),
+    ...expertTags,
     '每日刷题',
     '公考备考',
   ].slice(0, 10)
@@ -68,9 +79,11 @@ export function buildDouyinPost(questions: Question[]): XhsPostContent {
 
   const body = intro + bodyParts.join('\n') + outro
 
+  const expertTags = collectExpertTags(questions)
   const tags = [
     ...DOUYIN_TAGS,
     moduleName.replace(/与/g, ''),
+    ...expertTags,
     '每日刷题',
   ].slice(0, 8)
 

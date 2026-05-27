@@ -17,6 +17,7 @@ const diffLabel: Record<string, string> = {
   <article class="question-card">
     <header>
       <span class="index">#{{ index + 1 }}</span>
+      <span v-if="question.expertTag" class="expert">{{ question.expertTag }}解析</span>
       <span v-if="question.topicName" class="topic">{{ question.topicName }}</span>
       <span class="module">{{ question.moduleName }}</span>
       <span class="diff" :data-level="question.difficulty">
@@ -75,6 +76,15 @@ header {
   background: #e3f2fd;
   color: #1565c0;
   border-radius: 4px;
+}
+
+.expert {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: #fff3e0;
+  color: #e65100;
+  border-radius: 4px;
+  font-weight: 600;
 }
 
 .diff {

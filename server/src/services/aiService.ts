@@ -1,6 +1,7 @@
 import type { ExamModule, ExamPoint, Question } from '../types/index.js'
 import { getAiConfig } from '../config/aiConfig.js'
 import { buildAiPrompt } from './templateService.js'
+import { getExpertById, buildExpertSystemPrompt } from '../data/expertStyles.js'
 import { devGroup, devLog, preview } from '../utils/devLog.js'
 
 export { getAiConfig, SUPPORTED_AI_MODELS } from '../config/aiConfig.js'
@@ -15,21 +16,25 @@ interface AiQuestionRaw {
   difficulty: 'easy' | 'medium' | 'hard'
 }
 
-function parseAiResponse(text: string): AiQuestionRaw[] {
+function parseAiResponse(text: string, expertPrefix?: string): AiQuestionRaw[] {
   const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
   const parsed = JSON.parse(cleaned)
   if (!Array.isArray(parsed)) throw new Error('AI 返回格式不是数组')
   return parsed.map((q) => ({
     ...q,
-    analysis: cleanAnalysis(q.analysis ?? ''),
+    analysis: cleanAnalysis(q.analysis ?? '', expertPrefix),
     stem: cleanStem(q.stem ?? ''),
   }))
 }
 
-/** 去掉 AI 思考过程、试算草稿，只保留简洁解析 */
-function cleanAnalysis(text: string): string {
-  let s = text.replace(/\s+/g, ' ').trim()
-  if (!s) return '详见答案。'
+/** 去掉 AI 思考过程、试算草稿，保留名师风格前缀 */
+function cleanAnalysis(text: string, expertPrefix?: string): string {
+  const prefixMatch = text.match(/^【[^】]+】/)
+  const prefix = prefixMatch?.[0] ?? expertPrefix ?? ''
+  let s = text.replace(/^【[^】]+】\s*/, '').replace(/\s+/g, ' ').trim()
+  if (!s) return prefix ? `${prefix} 详见答案。` : '详见答案。'
+
+  const maxLen = prefix ? 220 : 180
 
   // 遇到命题草稿/试算段落，截断其后内容
   const truncateAt = ['因此第', '因此，第', '第三题修改为', '调整数字', '试算', '重新考虑', '计算错误？']
@@ -49,12 +54,13 @@ function cleanAnalysis(text: string): string {
   // 取含公式/结论的句子（优先短句）
   const sentences = s.split(/[。！？]/).map((x) => x.trim()).filter((x) => x.length > 4)
   const preferred = sentences.filter((x) =>
-    /[=≈%倍]|增长率|比重|答案|选|故|因此|所以|公式|间隔|增量/.test(x),
+    /[=≈%倍]|增长率|比重|答案|选|故|因此|所以|公式|间隔|增量|秒杀|放缩|坑|突破口|口诀|代入|排除/.test(x),
   )
-  const picked = (preferred.length ? preferred : sentences).slice(-2).join('。')
-  const result = (picked || s).slice(0, 180)
-  if (!result) return '详见答案。'
-  return result.endsWith('。') ? result : `${result}。`
+  const picked = (preferred.length ? preferred : sentences).slice(-3).join('。')
+  let result = (picked || s).slice(0, maxLen)
+  if (!result) return prefix ? `${prefix} 详见答案。` : '详见答案。'
+  if (!result.endsWith('。')) result = `${result}。`
+  return prefix ? `${prefix} ${result}` : result
 }
 
 function cleanStem(text: string): string {
@@ -138,15 +144,17 @@ export async function generateViaAi(
   aiOptions?: {
     providerId?: string
     modelOverride?: string
+    expertId?: string
     signal?: AbortSignal
   },
-): Promise<{ questions: Question[]; model: string; providerId: string }> {
+): Promise<{ questions: Question[]; model: string; providerId: string; expertTag?: string }> {
   const { apiKey, baseUrl, model, providerId } = getAiConfig({
     providerId: aiOptions?.providerId,
     modelOverride: aiOptions?.modelOverride,
   })
   if (!apiKey) throw new Error('未配置对应 AI 提供商的 API Key')
 
+  const expert = getExpertById(aiOptions?.expertId)
   const signal = aiOptions?.signal
   const started = Date.now()
   devGroup(`AI 出题 · ${module.name} · ${providerId}`, () => {
@@ -155,7 +163,12 @@ export async function generateViaAi(
     devLog('AI', 'baseUrl:', baseUrl)
     devLog('AI', 'count:', count, 'difficulty:', difficulty)
     devLog('AI', 'topic:', topic?.name ?? '（未指定考点）')
+    devLog('AI', 'expert:', expert?.name ?? '（通用）')
   })
+
+  const systemContent = expert
+    ? buildExpertSystemPrompt(expert)
+    : '你是公考命题专家。直接输出最终结果，禁止输出思考过程、试算、自我纠错、调整数字等中间步骤。解析仅写结论和关键公式，1-3句话。'
 
   const body: Record<string, unknown> = {
       model,
@@ -163,12 +176,8 @@ export async function generateViaAi(
       stream: true,
       stream_options: { include_usage: true },
       messages: [
-        {
-          role: 'system',
-          content:
-            '你是公考命题专家。直接输出最终结果，禁止输出思考过程、试算、自我纠错、调整数字等中间步骤。解析仅写结论和关键公式，1-3句话。',
-        },
-        { role: 'user', content: buildAiPrompt(module, count, difficulty, topic) },
+        { role: 'system', content: systemContent },
+        { role: 'user', content: buildAiPrompt(module, count, difficulty, topic, expert) },
       ],
     }
 
@@ -213,13 +222,15 @@ export async function generateViaAi(
     devLog('AI', 'rawPreview:', preview(content, 200))
   })
 
-  const raw = parseAiResponse(content)
+  const raw = parseAiResponse(content, expert?.analysisPrefix)
   const questions = raw.slice(0, count).map((q, i) => ({
     id: `${module.id}-ai-${Date.now()}-${i}`,
     moduleId: module.id,
     moduleName: module.name,
     topicId: topic?.id,
     topicName: topic?.name,
+    expertTag: expert?.name,
+    tags: expert ? [expert.name, module.name] : undefined,
     ...q,
   }))
 
@@ -230,7 +241,7 @@ export async function generateViaAi(
     difficulty: q.difficulty,
   })))
 
-  return { questions, model, providerId }
+  return { questions, model, providerId, expertTag: expert?.name }
 }
 
 export function isAiConfigured(): boolean {
