@@ -30,6 +30,7 @@ export function buildAiPrompt(
     getModulePromptHints(module, difficulty, topic),
     buildStrictDifficultyBlock(difficulty as Difficulty, module.name).replace(/\s+/g, ' ').trim(),
     isTuxing ? buildTuxingPromptIfNeeded(topic?.id) : '',
+    module.id === 'ziliao' ? '资料 stem：表格与设问分行，设问禁止写在表格最后一格或额外列。' : '',
     '只输出 JSON 数组，无 markdown、无解释。stem 表格用 \\n 换行。',
     `格式：${jsonExample}`,
   ]

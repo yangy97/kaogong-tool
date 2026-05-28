@@ -580,7 +580,7 @@ async function handleCopyDouyin() {
             </div>
 
             <div v-if="showAiOptions" class="controls-ai">
-              <span class="controls-ai-title">AI 设置（全部模块 AI 出题）</span>
+              <span class="controls-ai-title">AI 设置</span>
               <div class="controls-ai-grid">
                 <label class="control-field">
                   <span class="control-label">AI 提供商</span>
