@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { Question } from '@/types'
+import StemContent from './StemContent.vue'
+import TuxingBlock from './TuxingBlock.vue'
 
 defineProps<{
   question: Question
@@ -19,15 +21,18 @@ const diffLabel: Record<string, string> = {
       <span class="index">#{{ index + 1 }}</span>
       <span v-if="question.expertTag" class="expert">{{ question.expertTag }}解析</span>
       <span v-if="question.topicName" class="topic">{{ question.topicName }}</span>
+      <span v-if="question.tuxing" class="tuxing-tag">AI 图形</span>
       <span class="module">{{ question.moduleName }}</span>
       <span class="diff" :data-level="question.difficulty">
         {{ diffLabel[question.difficulty] }}
       </span>
     </header>
 
-    <p class="stem">{{ question.stem }}</p>
+    <StemContent :content="question.stem" class="stem" />
 
-    <ul v-if="question.options?.length" class="options">
+    <TuxingBlock v-if="question.tuxing" :data="question.tuxing" />
+
+    <ul v-else-if="question.options?.length" class="options">
       <li v-for="opt in question.options" :key="opt.key">
         <strong>{{ opt.key }}.</strong> {{ opt.text }}
       </li>
@@ -78,6 +83,14 @@ header {
   border-radius: 4px;
 }
 
+.tuxing-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: #f3e5f5;
+  color: #7b1fa2;
+  border-radius: 4px;
+}
+
 .expert {
   font-size: 12px;
   padding: 2px 8px;
@@ -107,7 +120,6 @@ header {
 
 .stem {
   font-size: 16px;
-  line-height: 1.7;
   margin-bottom: 12px;
 }
 

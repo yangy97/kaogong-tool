@@ -1,6 +1,6 @@
 /** DeepSeek / OpenAI / 通义千问 等多提供商 AI 配置 */
 
-export type GenerationMode = 'public' | 'ai' | 'hybrid'
+export type GenerationMode = 'ai'
 export type AiProviderId = 'deepseek' | 'openai' | 'qwen'
 
 export interface AiModelOption {
@@ -179,13 +179,8 @@ export function getAiConfig(options?: {
   }
 }
 
-export function resolveGenerationMode(
-  mode: string | undefined,
-  aiConfigured: boolean,
-): GenerationMode {
-  if (!aiConfigured) return 'public'
-  if (mode === 'ai' || mode === 'hybrid') return mode
-  return 'public'
+export function resolveGenerationMode(): GenerationMode {
+  return 'ai'
 }
 
 /** @deprecated 使用 getAllProviders */

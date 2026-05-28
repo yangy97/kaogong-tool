@@ -1,3 +1,5 @@
+import type { TuxingData } from './tuxing.js'
+
 export interface ExamModule {
   id: string
   name: string
@@ -32,6 +34,8 @@ export interface Question {
   /** AI 解析风格对应的名师标签 */
   expertTag?: string
   tags?: string[]
+  /** 图形推理可视化数据 */
+  tuxing?: TuxingData
 }
 
 export interface VocabItem {

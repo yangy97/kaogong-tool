@@ -1,4 +1,4 @@
-import type { ExamPoint, ExamModule } from '../types/index.js'
+import type { ExamPoint, ExamModule } from './types/index.js'
 
 export const EXAM_MODULES: ExamModule[] = [
   {

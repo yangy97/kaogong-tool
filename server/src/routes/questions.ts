@@ -1,14 +1,13 @@
 import { Router } from 'express'
 import {
   EXAM_MODULES,
-  EXAM_POINTS,
   EXAM_POINT_MAP,
   MODULE_MAP,
   getPointsByModule,
 } from '../constants.js'
 import { generateQuestions } from '../services/questionService.js'
 import { getExpertsForModule } from '../data/expertStyles.js'
-import { getAiConfig, resolveGenerationMode, getAllProviders, isAnyAiConfigured, getDefaultProviderId } from '../config/aiConfig.js'
+import { getAiConfig, getAllProviders, isAnyAiConfigured, getDefaultProviderId } from '../config/aiConfig.js'
 import { devGroup, devLog, isDevMode, preview } from '../utils/devLog.js'
 import { isAbortError } from '../utils/abort.js'
 import type { Question } from '../types/index.js'
@@ -59,7 +58,6 @@ router.post('/generate', async (req, res) => {
   const started = Date.now()
   const abortController = new AbortController()
 
-  // 仅在实际 abort 时取消（req.on('close') 会在请求体读完时误触发）
   const onAborted = () => {
     if (!res.writableEnded) {
       devLog('generate', '客户端主动取消，中止 AI 请求')
@@ -69,10 +67,10 @@ router.post('/generate', async (req, res) => {
   req.on('aborted', onAborted)
 
   try {
-    const { moduleId, topicId, count = 3, difficulty = 'medium', generationMode, aiModel, aiProvider, expertId } = req.body ?? {}
+    const { moduleId, topicId, count = 3, difficulty = 'medium', aiModel, aiProvider, expertId } = req.body ?? {}
 
     devGroup('POST /questions/generate', () => {
-      devLog('generate', '请求参数:', { moduleId, topicId, count, difficulty, generationMode, aiProvider, aiModel, expertId })
+      devLog('generate', '请求参数:', { moduleId, topicId, count, difficulty, aiProvider, aiModel, expertId })
     })
 
     if (!moduleId || !MODULE_MAP[moduleId]) {
@@ -101,10 +99,9 @@ router.post('/generate', async (req, res) => {
       providerId: typeof aiProvider === 'string' ? aiProvider : undefined,
       modelOverride: typeof aiModel === 'string' ? aiModel : undefined,
     })
-    const mode = resolveGenerationMode(generationMode, isAnyAiConfigured())
 
-    if ((mode === 'ai' || mode === 'hybrid') && !aiConfig.configured) {
-      res.status(400).json({ error: `${aiProvider ?? 'AI'} 未配置 API Key，请在 server/.env 中填写` })
+    if (!aiConfig.configured) {
+      res.status(400).json({ error: '未配置 AI API Key，请在 server/.env 中填写 DEEPSEEK_API_KEY 等' })
       return
     }
 
@@ -114,7 +111,6 @@ router.post('/generate', async (req, res) => {
       difficulty as 'easy' | 'medium' | 'hard',
       topic,
       {
-        generationMode: mode,
         aiProvider: typeof aiProvider === 'string' ? aiProvider : aiConfig.providerId,
         aiModel: typeof aiModel === 'string' ? aiModel : undefined,
         expertId: typeof expertId === 'string' ? expertId : undefined,
@@ -125,7 +121,7 @@ router.post('/generate', async (req, res) => {
     const durationMs = Date.now() - started
     const meta = {
       durationMs,
-      generationMode: mode,
+      generationMode: 'ai',
       source: result.source,
       mode: result.mode,
       aiModel: result.aiModel,
@@ -137,8 +133,7 @@ router.post('/generate', async (req, res) => {
         stem: preview(q.stem, 70),
         answer: q.answer,
         difficulty: q.difficulty,
-        fromAi: q.id.includes('-ai-'),
-        fromApi: q.id.startsWith('api-'),
+        hasTuxing: !!q.tuxing,
       })),
     }
 
@@ -149,7 +144,7 @@ router.post('/generate', async (req, res) => {
     res.json({
       module,
       topic,
-      generationMode: mode,
+      generationMode: 'ai',
       ...result,
       ...(isDevMode() ? { _meta: meta } : {}),
     })
@@ -160,7 +155,8 @@ router.post('/generate', async (req, res) => {
       return
     }
     console.error('[generate] 失败:', err)
-    if (!res.writableEnded) res.status(500).json({ error: '题目生成失败' })
+    const message = err instanceof Error ? err.message : '题目生成失败'
+    if (!res.writableEnded) res.status(500).json({ error: message })
   } finally {
     req.off('aborted', onAborted)
   }

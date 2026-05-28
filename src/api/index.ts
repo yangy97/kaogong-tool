@@ -62,9 +62,8 @@ export const api = {
       module: import('@/types').ExamModule
       topic?: import('@/types').ExamPoint
       questions: import('@/types').Question[]
-      source: 'ai' | 'template' | 'public-api' | 'parametric'
+      source: 'ai'
       mode?: string
-      generationMode?: import('@/types').GenerationMode
       aiProvider?: import('@/types').AiProviderId
       aiModel?: string
       expertTag?: string
@@ -109,6 +108,11 @@ export const api = {
       pageSize: number
     }>(`/vocab/list?${qs}`)
   },
+
+  webLookupVocab: (keyword: string) =>
+    request<import('@/types').VocabWebLookupResult>(
+      `/vocab/web-lookup?keyword=${encodeURIComponent(keyword)}`,
+    ),
 
   generateVocab: (body: { count?: number; categoryId?: string; mode?: 'quiz' | 'cards' }) =>
     request<{

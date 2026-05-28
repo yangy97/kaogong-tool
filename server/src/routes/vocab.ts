@@ -6,6 +6,7 @@ import {
   listVocab,
   listVocabCategories,
 } from '../services/vocabService.js'
+import { lookupVocabOnline } from '../services/vocabWebLookup.js'
 
 const router = Router()
 
@@ -27,6 +28,17 @@ router.get('/list', (req, res) => {
       pageSize: pageSize ? Number(pageSize) : 50,
     }),
   )
+})
+
+router.get('/web-lookup', async (req, res) => {
+  try {
+    const keyword = typeof req.query.keyword === 'string' ? req.query.keyword : ''
+    const result = await lookupVocabOnline(keyword)
+    res.json(result)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '联网查词失败'
+    res.status(400).json({ error: message })
+  }
 })
 
 router.post('/generate', (req, res) => {

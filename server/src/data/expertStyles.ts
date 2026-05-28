@@ -19,7 +19,7 @@ export const EXAM_EXPERTS: ExamExpert[] = [
     modules: ['shuliang', 'ziliao'],
     specialty: '数量·资料速算',
     analysisPrefix: '【花生十三·速算思路】',
-    stylePrompt: `只用「花生十三」最快的一种套路（假设法/特值法/115法/首数尾数之一），1-2 句直达答案。可写关键公式与结果，禁止列多种算法、禁止写「实际计算」「秒杀点」「注意」等分段标题。`,
+    stylePrompt: `模仿「花生十三」速算：用分号列出 2-3 个关键式子及结果，最后一句结论+选X。禁止逐步试算、禁止「115法：…不对」式纠错。`,
   },
   {
     id: 'gaozhao',
@@ -101,15 +101,4 @@ export function getExpertsForModule(moduleId: string): Array<ExamExpert & { reco
     if (a.recommended !== b.recommended) return a.recommended ? -1 : 1
     return 0
   })
-}
-
-export function buildExpertSystemPrompt(expert: ExamExpert): string {
-  return `你是公考命题专家。analysis 必须模仿「${expert.name}」的解题习惯：${expert.stylePrompt}
-
-输出即最终版，后端不会改写 analysis。请直接写出考生能看的精简解析：
-- 只用一种最快方法，1-2 句，总长 ≤80 字
-- 必须以「${expert.analysisPrefix}」开头，末尾写「选X」
-- 示例：${expert.analysisPrefix}增长量≈80%×2%÷1.12≈1.4%，选A。
-
-严禁：多种算法对比、「实际计算/秒杀点/注意」分段标题、质疑题干、自我纠错、试算草稿。`
 }

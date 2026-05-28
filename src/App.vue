@@ -16,10 +16,10 @@ import type {
   ExamExpert,
   ExamModule,
   ExamPoint,
-  GenerationMode,
   Question,
   VocabCategory,
   VocabItem,
+  VocabWebLookupResult,
   XhsPostContent,
 } from '@/types'
 import {
@@ -48,7 +48,7 @@ const currentTopics = computed<ExamPoint[]>(() => {
 const count = ref(3)
 const difficulty = ref<'easy' | 'medium' | 'hard'>('medium')
 const questions = ref<Question[]>([])
-const source = ref<'ai' | 'template' | 'public-api' | 'parametric' | null>(null)
+const source = ref<'ai' | 'vocab' | null>(null)
 const sourceMode = ref('')
 const loading = ref(false)
 const loadingMessage = ref('正在生成题目…')
@@ -68,12 +68,13 @@ const activeAiProvider = ref('')
 const activeExpertTag = ref('')
 const experts = ref<ExamExpert[]>([])
 const selectedExpertId = ref('none')
-const generationMode = ref<GenerationMode>('public')
 const toast = ref('')
 const xhsImages = ref<GeneratedImage[]>([])
 const douyinImages = ref<GeneratedImage[]>([])
 const xhsZipName = ref('考公小红书配图.zip')
 const douyinZipName = ref('考公抖音配图.zip')
+const imageLoading = ref(false)
+const loadingPlatform = ref<ImagePlatform | null>(null)
 let generateAbort: AbortController | null = null
 let generateRunId = 0
 const cancelRequested = ref(false)
@@ -93,6 +94,8 @@ const vocabTotal = ref(0)
 const selectedVocabCategory = ref('')
 const vocabKeyword = ref('')
 const vocabList = ref<VocabItem[]>([])
+const vocabWebLookup = ref<VocabWebLookupResult | null>(null)
+const vocabWebLoading = ref(false)
 
 function showToast(msg: string, duration = 3000) {
   toast.value = msg
@@ -116,23 +119,17 @@ function resetOutput() {
 }
 
 const sourceLabel = computed(() => {
-  if (source.value === 'ai') {
-    const p = aiProviders.value.find((x) => x.id === (activeAiProvider.value as AiProviderId))
-    const tag = p?.name ? `${p.name}/` : ''
-    const expert = activeExpertTag.value ? ` · ${activeExpertTag.value}解析` : ''
-    return activeAiModel.value
-      ? `AI 生成 (${tag}${activeAiModel.value}${expert})`
-      : `AI 实时生成${expert}`
-  }
-  if (sourceMode.value === 'public-api-ai-hybrid') return '公共数据 + AI 补全'
-  if (source.value === 'public-api') return '公共数据接口'
-  if (sourceMode.value === 'public-api-mixed') return '公共数据 + 随机变式'
-  if (source.value === 'parametric' || sourceMode.value === 'parametric') return '随机变式（每次不同）'
-  if (sourceMode.value === 'vocab-random') return '词汇随机抽取'
-  return source.value === 'template' ? '内置题库' : ''
+  if (source.value === 'vocab') return '词汇随机抽取'
+  if (source.value !== 'ai') return ''
+  const p = aiProviders.value.find((x) => x.id === (activeAiProvider.value as AiProviderId))
+  const tag = p?.name ? `${p.name}/` : ''
+  const expert = activeExpertTag.value ? ` · ${activeExpertTag.value}解析` : ''
+  return activeAiModel.value
+    ? `AI 生成 (${tag}${activeAiModel.value}${expert})`
+    : `AI 生成${expert}`
 })
 
-const showAiOptions = computed(() => aiConfigured.value && generationMode.value !== 'public')
+const showAiOptions = computed(() => aiConfigured.value)
 
 const currentProvider = computed(() =>
   aiProviders.value.find((p) => p.id === selectedAiProvider.value),
@@ -155,12 +152,6 @@ const difficultyOptions: SelectOption[] = [
   { value: 'medium', label: '中等' },
   { value: 'hard', label: '困难' },
 ]
-
-const generationModeOptions = computed<SelectOption[]>(() => [
-  { value: 'public', label: '公共数据（默认）' },
-  { value: 'ai', label: 'AI 命题', disabled: !aiConfigured.value },
-  { value: 'hybrid', label: '混合（公共 + AI 补全）', disabled: !aiConfigured.value },
-])
 
 const aiProviderOptions = computed<SelectOption[]>(() =>
   aiProviders.value.map((p) => ({
@@ -291,7 +282,7 @@ async function runGenerate(generateFn: (signal: AbortSignal) => Promise<void>) {
 
   loading.value = true
   resetOutput()
-  setLoading('正在生成题目…', '拉取公共数据 / AI 命题中，请稍候')
+  setLoading('正在生成题目…', 'AI 命题中，请稍候')
   await nextTick()
 
   // 延迟显示取消按钮，避免与「生成」点击冲突
@@ -329,10 +320,9 @@ async function handleGenerate() {
       topicId: selectedTopicId.value || undefined,
       count: count.value,
       difficulty: difficulty.value,
-      generationMode: generationMode.value,
       aiProvider: selectedAiProvider.value,
-      aiModel: showAiOptions.value && aiModel.value ? aiModel.value : undefined,
-      expertId: showAiOptions.value && selectedExpertId.value !== 'none' ? selectedExpertId.value : undefined,
+      aiModel: aiModel.value || undefined,
+      expertId: selectedExpertId.value !== 'none' ? selectedExpertId.value : undefined,
     }, { signal })
     questions.value = res.questions
     source.value = res.source
@@ -351,6 +341,7 @@ async function handleGenerate() {
 
     const topicHint = res.topic ? `（${res.topic.name}）` : ''
     showToast(`已生成 ${questions.value.length} 道题${topicHint}`)
+    void prefetchCoverPreviews()
   })
 }
 
@@ -362,7 +353,7 @@ async function handleVocabGenerate() {
       mode: 'quiz',
     })
     questions.value = res.questions ?? []
-    source.value = 'template'
+    source.value = 'vocab'
     sourceMode.value = 'vocab-random'
 
     setLoading('正在准备发布文案…')
@@ -374,17 +365,47 @@ async function handleVocabGenerate() {
     douyinCreatorUrl.value = xhs.douyinCreatorUrl
 
     showToast(`已随机抽取 ${questions.value.length} 道词汇题`)
+    void prefetchCoverPreviews()
   })
 }
 
 async function handleVocabCategory(id: string) {
   selectedVocabCategory.value = id
+  vocabWebLookup.value = null
   await loadVocabList()
 }
 
 async function handleVocabSearch(keyword: string) {
   vocabKeyword.value = keyword
+  vocabWebLookup.value = null
   await loadVocabList()
+}
+
+async function handleVocabWebSearch(keyword: string) {
+  const q = keyword.trim()
+  if (!q) {
+    showToast('请输入要查询的词语')
+    return
+  }
+  vocabWebLoading.value = true
+  vocabWebLookup.value = null
+  try {
+    const result = await api.webLookupVocab(q)
+    vocabWebLookup.value = result
+    vocabList.value = result.local.length ? result.local : vocabList.value
+    vocabTotal.value = result.local.length || vocabTotal.value
+    if (result.web) {
+      showToast(`已查到「${result.web.word}」在线释义`)
+    } else if (result.local.length) {
+      showToast(`库内找到 ${result.local.length} 条，在线释义未返回`)
+    } else {
+      showToast('库内无匹配，请使用下方外链继续查')
+    }
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : '联网查词失败')
+  } finally {
+    vocabWebLoading.value = false
+  }
 }
 
 async function ensureImages(platform: ImagePlatform): Promise<GeneratedImage[]> {
@@ -404,6 +425,28 @@ async function ensureImages(platform: ImagePlatform): Promise<GeneratedImage[]> 
       douyinZipName.value = `考公抖音配图-${date}.zip`
     }
     return generated
+}
+
+async function handleNeedPlatformImages(platform: ImagePlatform) {
+  if (!post.value || !questions.value.length) return
+  const cache = platform === 'xhs' ? xhsImages : douyinImages
+  if (cache.value.length || imageLoading.value) return
+
+  imageLoading.value = true
+  loadingPlatform.value = platform
+  try {
+    await ensureImages(platform)
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : '配图生成失败')
+  } finally {
+    imageLoading.value = false
+    loadingPlatform.value = null
+  }
+}
+
+async function prefetchCoverPreviews() {
+  if (!post.value || !questions.value.length) return
+  await handleNeedPlatformImages('xhs')
 }
 
 async function handleDownloadPlatform(platform: ImagePlatform) {
@@ -496,7 +539,7 @@ async function handleCopyDouyin() {
         </div>
       </div>
       <span class="badge" :class="{ ai: aiConfigured }">
-        {{ aiConfigured ? `AI 已配置 · ${configuredProviderHint}` : '公共数据模式' }}
+        {{ aiConfigured ? `AI 已配置 · ${configuredProviderHint}` : '请配置 AI Key' }}
       </span>
     </header>
 
@@ -534,18 +577,10 @@ async function handleCopyDouyin() {
                 <span class="control-label">难度</span>
                 <FormSelect v-model="difficulty" :options="difficultyOptions" :disabled="loading" />
               </label>
-              <label class="control-field control-field--wide">
-                <span class="control-label">出题方式</span>
-                <FormSelect
-                  v-model="generationMode"
-                  :options="generationModeOptions"
-                  :disabled="loading"
-                />
-              </label>
             </div>
 
             <div v-if="showAiOptions" class="controls-ai">
-              <span class="controls-ai-title">AI 设置</span>
+              <span class="controls-ai-title">AI 设置（全部模块 AI 出题）</span>
               <div class="controls-ai-grid">
                 <label class="control-field">
                   <span class="control-label">AI 提供商</span>
@@ -574,9 +609,12 @@ async function handleCopyDouyin() {
               </div>
             </div>
 
-            <button class="generate-btn" :disabled="loading" @click="handleGenerate">
+            <p v-if="!aiConfigured" class="ai-hint">
+              请在 server/.env 中配置 DEEPSEEK_API_KEY 等后再生成题目
+            </p>
+            <button class="generate-btn" :disabled="loading || !aiConfigured" @click="handleGenerate">
               <span v-if="loading" class="btn-spinner" />
-              {{ loading ? '生成中…' : '✨ 按考点生成题目' }}
+              {{ loading ? '生成中…' : '✨ AI 按考点生成题目' }}
             </button>
           </div>
         </section>
@@ -585,21 +623,20 @@ async function handleCopyDouyin() {
       <template v-else>
         <VocabPanel
           v-model:keyword="vocabKeyword"
+          v-model:count="count"
           :categories="vocabCategories"
           :selected-category-id="selectedVocabCategory"
           :vocab-list="vocabList"
           :total="vocabTotal"
           :loading="loading"
+          :web-loading="vocabWebLoading"
+          :web-lookup="vocabWebLookup"
+          :count-options="countOptions"
           @select-category="handleVocabCategory"
           @search="handleVocabSearch"
+          @web-search="handleVocabWebSearch"
           @generate="handleVocabGenerate"
         />
-        <div class="controls vocab-controls">
-          <label class="control-field">
-            <span class="control-label">题目数量</span>
-            <FormSelect v-model="count" :options="countOptions" :disabled="loading" />
-          </label>
-        </div>
       </template>
 
       <template v-if="questions.length">
@@ -632,20 +669,23 @@ async function handleCopyDouyin() {
         </div>
 
         <ImageGallery
-          v-if="xhsImages.length || douyinImages.length"
+          v-if="post && questions.length"
           :xhs-images="xhsImages"
           :douyin-images="douyinImages"
           :xhs-zip-name="xhsZipName"
           :douyin-zip-name="douyinZipName"
+          :image-loading="imageLoading"
+          :loading-platform="loadingPlatform"
           @download-zip="handleDownloadPlatform"
           @download-one="handleDownloadOne"
+          @need-images="handleNeedPlatformImages"
         />
       </template>
 
       <div v-else-if="!loading" class="empty">
         <p v-if="appMode === 'exam'">👆 选择模块和考点后点击「按考点生成题目」</p>
         <p v-else>👆 浏览词汇库，或点击「生成词汇题」开始</p>
-        <p class="sub">支持公共数据出题 · 700 高频词 · 小红书 / 抖音双平台发布</p>
+        <p class="sub">全部模块 AI 出题 · 700 高频词 · 小红书 / 抖音双平台发布</p>
       </div>
     </main>
 
@@ -732,14 +772,6 @@ h1 {
   color: var(--primary);
 }
 
-.vocab-controls {
-  background: var(--card);
-  border-radius: var(--radius);
-  padding: 16px 24px;
-  box-shadow: var(--shadow);
-  margin-bottom: 24px;
-}
-
 .panel {
   background: var(--card);
   border-radius: var(--radius);
@@ -806,6 +838,12 @@ h1 {
   font-size: 13px;
   color: var(--text-secondary);
   font-weight: 500;
+}
+
+.ai-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #b45309;
 }
 
 .generate-btn {

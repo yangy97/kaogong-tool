@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import type { GeneratedImage, ImagePlatform } from '@/utils/xhsCard'
 import { getPlatformLabel } from '@/utils/xhsCard'
 
-defineProps<{
+const props = defineProps<{
   xhsImages: GeneratedImage[]
   douyinImages: GeneratedImage[]
   xhsZipName: string
   douyinZipName: string
+  imageLoading?: boolean
+  loadingPlatform?: ImagePlatform | null
 }>()
 
 const emit = defineEmits<{
   downloadZip: [platform: ImagePlatform]
   downloadOne: [img: GeneratedImage]
+  needImages: [platform: ImagePlatform]
 }>()
 
 const activeTab = ref<ImagePlatform>('xhs')
@@ -21,10 +24,27 @@ const tabs: { id: ImagePlatform; label: string; desc: string }[] = [
   { id: 'xhs', label: '小红书风格', desc: '3:4 暖色' },
   { id: 'douyin', label: '抖音风格', desc: '9:16 深色' },
 ]
+
+function selectTab(id: ImagePlatform) {
+  activeTab.value = id
+  const hasImages = id === 'xhs' ? props.xhsImages.length : props.douyinImages.length
+  if (!hasImages) {
+    emit('needImages', id)
+  }
+}
+
+watch(
+  () => props.xhsImages.length,
+  (len) => {
+    if (len && !props.douyinImages.length && activeTab.value === 'douyin') {
+      emit('needImages', 'douyin')
+    }
+  },
+)
 </script>
 
 <template>
-  <section v-if="xhsImages.length || douyinImages.length" class="gallery">
+  <section v-if="xhsImages.length || douyinImages.length || imageLoading" class="gallery">
     <div class="gallery-head">
       <h3>🖼️ 配图预览</h3>
     </div>
@@ -35,14 +55,18 @@ const tabs: { id: ImagePlatform; label: string; desc: string }[] = [
         :key="tab.id"
         class="tab"
         :class="{ active: activeTab === tab.id }"
-        @click="activeTab = tab.id"
+        @click="selectTab(tab.id)"
       >
         {{ tab.label }}
         <span class="tab-desc">{{ tab.desc }}</span>
       </button>
     </div>
 
-    <template v-if="activeTab === 'xhs' && xhsImages.length">
+    <p v-if="imageLoading && loadingPlatform === activeTab" class="loading-tab">
+      正在生成{{ getPlatformLabel(activeTab) }}配图…
+    </p>
+
+    <template v-else-if="activeTab === 'xhs' && xhsImages.length">
       <div class="tab-actions">
         <span>{{ xhsImages.length }} 张</span>
         <button class="zip-btn" @click="emit('downloadZip', 'xhs')">下载小红书 ZIP</button>
@@ -59,7 +83,7 @@ const tabs: { id: ImagePlatform; label: string; desc: string }[] = [
       </div>
     </template>
 
-    <template v-if="activeTab === 'douyin' && douyinImages.length">
+    <template v-else-if="activeTab === 'douyin' && douyinImages.length">
       <div class="tab-actions">
         <span>{{ douyinImages.length }} 张</span>
         <button class="zip-btn douyin" @click="emit('downloadZip', 'douyin')">下载抖音 ZIP</button>
@@ -75,10 +99,6 @@ const tabs: { id: ImagePlatform; label: string; desc: string }[] = [
         </figure>
       </div>
     </template>
-
-    <p v-if="activeTab === 'douyin' && !douyinImages.length" class="empty-tab">
-      点击「下载抖音 ZIP」或「一键发布抖音」后生成 {{ getPlatformLabel('douyin') }} 风格配图
-    </p>
   </section>
 </template>
 
@@ -214,9 +234,9 @@ const tabs: { id: ImagePlatform; label: string; desc: string }[] = [
   color: var(--primary);
 }
 
-.empty-tab {
+.loading-tab {
   text-align: center;
-  padding: 40px;
+  padding: 48px 20px;
   color: var(--text-secondary);
   font-size: 14px;
 }

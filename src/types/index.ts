@@ -1,3 +1,5 @@
+import type { TuxingData } from './tuxing'
+
 export interface ExamPoint {
   id: string
   moduleId: string
@@ -32,6 +34,8 @@ export interface Question {
   difficulty: 'easy' | 'medium' | 'hard'
   expertTag?: string
   tags?: string[]
+  /** 图形推理可视化数据 */
+  tuxing?: TuxingData
 }
 
 export interface VocabItem {
@@ -54,7 +58,27 @@ export interface VocabCategory {
   count?: number
 }
 
-export type GenerationMode = 'public' | 'ai' | 'hybrid'
+export interface VocabWebLink {
+  name: string
+  url: string
+}
+
+export type VocabWebSource = 'youdao' | 'iciba' | 'local'
+
+export interface VocabWebSnippet {
+  word: string
+  meaning: string
+  pinyin?: string
+  source: VocabWebSource
+  sourceUrl: string
+}
+
+export interface VocabWebLookupResult {
+  keyword: string
+  local: VocabItem[]
+  web?: VocabWebSnippet
+  links: VocabWebLink[]
+}
 
 export type AiProviderId = 'deepseek' | 'openai' | 'qwen'
 
@@ -89,7 +113,6 @@ export interface GenerateRequest {
   topicId?: string
   count?: number
   difficulty?: 'easy' | 'medium' | 'hard'
-  generationMode?: GenerationMode
   aiProvider?: AiProviderId
   aiModel?: string
   expertId?: string

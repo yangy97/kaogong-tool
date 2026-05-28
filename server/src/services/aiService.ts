@@ -1,11 +1,18 @@
 import type { ExamModule, ExamPoint, Question } from '../types/index.js'
+import type { TuxingData } from '../types/tuxing.js'
 import { getAiConfig } from '../config/aiConfig.js'
-import { buildAiPrompt } from './templateService.js'
-import { getExpertById, buildExpertSystemPrompt } from '../data/expertStyles.js'
+import { buildAiPrompt } from './aiPromptService.js'
+import { getExpertById } from '../data/expertStyles.js'
+import { buildModuleSystemPrompt } from '../data/modulePromptHints.js'
+import { buildStrictDifficultyBlock, getAiTemperature, type Difficulty } from '../utils/difficultyConfig.js'
+import { normalizeStemTables } from '../utils/stemFormat.js'
+import { compactAnalysis } from '../utils/analysisNormalize.js'
+import { normalizeTuxingFromAi } from '../utils/tuxingNormalize.js'
+import { isTuxingTopicId } from '../types/tuxing.js'
 import { devGroup, devLog, preview } from '../utils/devLog.js'
 
 export { getAiConfig, SUPPORTED_AI_MODELS } from '../config/aiConfig.js'
-export type { AiModelOption, AiRuntimeConfig, GenerationMode } from '../config/aiConfig.js'
+export type { AiModelOption, AiRuntimeConfig } from '../config/aiConfig.js'
 
 interface AiQuestionRaw {
   type: 'single' | 'multiple' | 'essay'
@@ -14,31 +21,49 @@ interface AiQuestionRaw {
   answer: string
   analysis: string
   difficulty: 'easy' | 'medium' | 'hard'
+  tuxing?: TuxingData
 }
 
-function parseAiResponse(text: string, expertPrefix?: string): AiQuestionRaw[] {
+function parseAiResponse(text: string, expertPrefix?: string, isTuxing = false): AiQuestionRaw[] {
   const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
   const parsed = JSON.parse(cleaned)
   if (!Array.isArray(parsed)) throw new Error('AI 返回格式不是数组')
-  return parsed.map((q) => ({
-    ...q,
-    analysis: normalizeAnalysis(q.analysis ?? '', expertPrefix),
-    stem: normalizeStem(q.stem ?? ''),
-  }))
+  return parsed.map((q, i) => {
+    const tuxing = isTuxing ? normalizeTuxingFromAi(q.tuxing) : undefined
+    if (isTuxing && !tuxing) {
+      throw new Error(`第 ${i + 1} 题缺少有效的 tuxing 图形数据，请重试`)
+    }
+    const options =
+      isTuxing && tuxing
+        ? ['A', 'B', 'C', 'D'].map((key) => ({ key, text: '' }))
+        : q.options
+    return {
+      ...q,
+      options,
+      tuxing,
+      analysis: normalizeAnalysis(q.analysis ?? '', {
+        expertPrefix,
+        answer: q.answer,
+        isEssay: q.type === 'essay',
+      }),
+      stem: normalizeStem(isTuxing ? '下列选项中，符合所给图形变化规律的是：' : (q.stem ?? '')),
+    }
+  })
 }
 
-/** 仅规范化空白；解析内容由 AI prompt 直接约束，不在后端裁剪改写 */
-function normalizeAnalysis(text: string, expertPrefix?: string): string {
-  const s = text.replace(/\s+/g, ' ').trim()
-  if (!s) return expertPrefix ? `${expertPrefix} 详见答案。` : '详见答案。'
-  if (expertPrefix && !/^【[^】]+】/.test(s)) {
-    return `${expertPrefix} ${s}`
-  }
-  return s
+/** 规范化并强制压缩啰嗦解析 */
+function normalizeAnalysis(
+  text: string,
+  options?: { expertPrefix?: string; answer?: string; isEssay?: boolean },
+): string {
+  return compactAnalysis(text, options)
 }
 
 function normalizeStem(text: string): string {
-  return text.replace(/\s+/g, ' ').trim()
+  const lines = text
+    .split('\n')
+    .map((line) => line.replace(/[^\S\n]+/g, ' ').trim())
+  return normalizeStemTables(lines.filter(Boolean).join('\n'))
 }
 
 function isDeepSeekApi(baseUrl: string): boolean {
@@ -127,6 +152,10 @@ export async function generateViaAi(
 
   const expert = getExpertById(aiOptions?.expertId)
   const signal = aiOptions?.signal
+  const systemPrompt = buildModuleSystemPrompt(module, expert)
+  const userPrompt = buildAiPrompt(module, count, difficulty, topic, expert)
+  const temperature = getAiTemperature(module.id, difficulty as Difficulty)
+  const maxTokens = Math.min(4096, count * 450 + 256)
   const started = Date.now()
   devGroup(`AI 出题 · ${module.name} · ${providerId}`, () => {
     devLog('AI', 'provider:', providerId)
@@ -135,21 +164,21 @@ export async function generateViaAi(
     devLog('AI', 'count:', count, 'difficulty:', difficulty)
     devLog('AI', 'topic:', topic?.name ?? '（未指定考点）')
     devLog('AI', 'expert:', expert?.name ?? '（通用）')
+    devLog('AI', 'promptChars:', { system: systemPrompt.length, user: userPrompt.length })
   })
 
   const body: Record<string, unknown> = {
     model,
-    temperature: 0.5,
+    temperature,
+    max_tokens: maxTokens,
     stream: true,
     stream_options: { include_usage: true },
     messages: [
       {
         role: 'system',
-        content: expert
-          ? buildExpertSystemPrompt(expert)
-          : '你是公考命题专家。analysis 直接输出最终精简版：1-2 句，公式/结论+选X，≤80 字。禁止思考过程、试算、多种方法对比。后端不会改写你的 analysis。',
+        content: systemPrompt,
       },
-      { role: 'user', content: buildAiPrompt(module, count, difficulty, topic, expert) },
+      { role: 'user', content: userPrompt },
     ],
   }
 
@@ -190,11 +219,17 @@ export async function generateViaAi(
   if (!content) throw new Error('AI 返回内容为空')
 
   devGroup(`AI 响应 · ${Date.now() - started}ms`, () => {
-    if (usage) devLog('AI', 'tokens:', usage)
+    if (usage) {
+      devLog('AI', 'tokens:', usage)
+      const ratio = usage.prompt_tokens && usage.completion_tokens
+        ? (usage.prompt_tokens / usage.completion_tokens).toFixed(1)
+        : '-'
+      devLog('AI', 'input/output ratio:', ratio)
+    }
     devLog('AI', 'rawPreview:', preview(content, 200))
   })
 
-  const raw = parseAiResponse(content, expert?.analysisPrefix)
+  const raw = parseAiResponse(content, expert?.analysisPrefix, isTuxingTopicId(topic?.id))
   const questions = raw.slice(0, count).map((q, i) => ({
     id: `${module.id}-ai-${Date.now()}-${i}`,
     moduleId: module.id,

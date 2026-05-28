@@ -1,6 +1,8 @@
 import html2canvas from 'html2canvas'
 import JSZip from 'jszip'
 import type { Question, XhsPostContent } from '@/types'
+import { stemToHtml } from '@/utils/stemFormat'
+import { tuxingToHtml } from '@/utils/tuxingRender'
 
 export type ImagePlatform = 'xhs' | 'douyin'
 
@@ -46,6 +48,37 @@ const PLATFORM_CONFIG = {
   },
 }
 
+const COVER_BRAND = '学行测'
+
+/** 封面顶部品牌字描边（html2canvas 兼容） */
+function coverBrandTextShadow(stroke = 3): string {
+  const shadows: string[] = []
+  for (let dx = -stroke; dx <= stroke; dx++) {
+    for (let dy = -stroke; dy <= stroke; dy++) {
+      if (dx !== 0 || dy !== 0) shadows.push(`${dx}px ${dy}px 0 #000`)
+    }
+  }
+  return shadows.join(', ')
+}
+
+function renderCoverBrandHeader(platform: ImagePlatform): string {
+  const fontSize = platform === 'douyin' ? 64 : 56
+  return `
+    <div style="text-align:center;margin-bottom:24px;flex-shrink:0;">
+      <span style="display:inline-flex;align-items:center;justify-content:center;gap:4px;line-height:1.2;">
+        <span style="font-size:${fontSize}px;">🐑🍊</span>
+        <span style="
+          font-size:${fontSize}px;
+          font-weight:900;
+          color:#fff;
+          letter-spacing:2px;
+          text-shadow:${coverBrandTextShadow(3)};
+        ">${COVER_BRAND}</span>
+      </span>
+    </div>
+  `
+}
+
 function createCardElement(
   content: string,
   platform: ImagePlatform,
@@ -54,6 +87,7 @@ function createCardElement(
     subtitle?: string
     theme?: 'cover' | 'question' | 'answer'
     index?: number
+    contentHtml?: string
   },
 ): HTMLDivElement {
   const cfg = PLATFORM_CONFIG[platform]
@@ -86,26 +120,34 @@ function createCardElement(
   if (isCover) {
     const accentLine =
       platform === 'douyin'
-        ? `<div style="width:120px;height:6px;background:linear-gradient(90deg,${cfg.accent},${(cfg as typeof PLATFORM_CONFIG.douyin).accent2});border-radius:3px;margin:0 auto 32px;"></div>`
+        ? `<div style="width:120px;height:6px;background:linear-gradient(90deg,${cfg.accent},${(cfg as typeof PLATFORM_CONFIG.douyin).accent2});border-radius:3px;margin:0 auto 28px;"></div>`
         : ''
+    const titleSize = platform === 'douyin' ? 72 : 80
+    const titleTop = platform === 'douyin' ? 72 : 120
     el.innerHTML = `
-      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;">
-        <div style="font-size:56px;margin-bottom:24px;">🐑🍊</div>
-        ${accentLine}
-        <div style="font-size:${platform === 'douyin' ? '64' : '56'}px;font-weight:800;line-height:1.3;margin-bottom:32px;">${options.title}</div>
-        <div style="font-size:36px;opacity:0.85;">${options.subtitle ?? ''}</div>
-        <div style="margin-top:80px;font-size:28px;opacity:0.8;padding:16px 40px;border:2px solid ${platform === 'douyin' ? cfg.accent : 'rgba(255,255,255,0.6)'};border-radius:40px;color:${platform === 'douyin' ? cfg.accent : 'inherit'};">
-          ${cfg.coverBadge}
+      <div style="flex:1;display:flex;flex-direction:column;height:100%;">
+        ${renderCoverBrandHeader(platform)}
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;padding-top:${titleTop}px;">
+          ${accentLine}
+          <div style="font-size:${titleSize}px;font-weight:900;line-height:1.2;margin-bottom:20px;letter-spacing:1px;">${options.title}</div>
+          <div style="font-size:${platform === 'douyin' ? 36 : 40}px;opacity:0.88;font-weight:500;">${options.subtitle ?? ''}</div>
+          <div style="margin-top:auto;margin-bottom:48px;font-size:28px;opacity:0.85;padding:16px 40px;border:2px solid ${platform === 'douyin' ? cfg.accent : 'rgba(255,255,255,0.6)'};border-radius:40px;color:${platform === 'douyin' ? cfg.accent : 'inherit'};">
+            ${cfg.coverBadge}
+          </div>
         </div>
       </div>
     `
   } else {
     const badge = options.index != null ? `第 ${options.index + 1} 题` : '解析'
     const accent2 = platform === 'douyin' ? (cfg as typeof PLATFORM_CONFIG.douyin).accent2 : cfg.accent
+    const bodyContent = options.contentHtml ?? content.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const bodyStyle = options.contentHtml
+      ? 'flex:1;font-size:28px;line-height:1.8;overflow:hidden;'
+      : 'flex:1;font-size:' + (platform === 'douyin' ? '32' : '30') + 'px;line-height:1.8;white-space:pre-wrap;overflow:hidden;'
     el.innerHTML = `
       <div style="font-size:28px;color:${cfg.accent};font-weight:600;margin-bottom:16px;">${badge}</div>
       <div style="font-size:32px;font-weight:700;color:${accent2};margin-bottom:24px;">${options.title}</div>
-      <div style="flex:1;font-size:${platform === 'douyin' ? '32' : '30'}px;line-height:1.8;white-space:pre-wrap;overflow:hidden;">${content}</div>
+      <div style="${bodyStyle}">${bodyContent}</div>
       <div style="font-size:24px;color:${cfg.footerColor};text-align:center;margin-top:24px;">${cfg.footer}</div>
     `
   }
@@ -149,6 +191,19 @@ function buildCoverTitle(questions: Question[], platform: ImagePlatform): string
   return title.length > maxLen ? title.slice(0, maxLen - 1) + '…' : title
 }
 
+/** 配图解析区：分号换行，去掉啰嗦试算句 */
+function formatAnalysisForCardDisplay(analysis: string): string {
+  const trimmed = analysis
+    .replace(/\?\s*错[,，:：]?[\s\S]*/gi, '')
+    .replace(/实际计算[:：][\s\S]*/gi, '')
+    .replace(/需重算[\s\S]*/gi, '')
+    .trim()
+  return trimmed
+    .replace(/；/g, '\n')
+    .replace(/([。！？])\s*(选\s*[A-D])/i, '$1\n$2')
+    .trim()
+}
+
 export async function generatePlatformImages(
   questions: Question[],
   _post: XhsPostContent,
@@ -178,8 +233,19 @@ export async function generatePlatformImages(
     const num = String(i + 1).padStart(2, '0')
 
     let content = q.stem
-    if (q.options?.length) {
-      content += '\n\n' + q.options.map((o) => `${o.key}. ${o.text}`).join('\n')
+    let contentHtml = stemToHtml(q.stem)
+    if (q.tuxing) {
+      contentHtml += tuxingToHtml(q.tuxing, { figureSize: 64, dark: platform === 'douyin' })
+    } else if (q.options?.length) {
+      const optsText = q.options.map((o) => `${o.key}. ${o.text}`).join('\n')
+      content += '\n\n' + optsText
+      const optsHtml = q.options
+        .map(
+          (o) =>
+            `<div style="margin-top:12px;padding:10px 14px;background:${platform === 'douyin' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'};border-radius:8px;">${o.key}. ${o.text.replace(/</g, '&lt;')}</div>`,
+        )
+        .join('')
+      contentHtml += `<div style="margin-top:20px;">${optsHtml}</div>`
     }
 
     const qBlob = await renderToBlob(
@@ -187,6 +253,7 @@ export async function generatePlatformImages(
         title: q.moduleName,
         theme: 'question',
         index: i,
+        contentHtml,
       }),
       platform,
     )
@@ -199,8 +266,8 @@ export async function generatePlatformImages(
     })
 
     const answerContent = q.options
-      ? `✅ 答案：${q.answer}\n\n📖 解析：\n${q.analysis}`
-      : `📝 参考答案：\n${q.answer}\n\n📖 思路：\n${q.analysis}`
+      ? `✅ 答案：${q.answer}\n\n📖 解析：\n${formatAnalysisForCardDisplay(q.analysis)}`
+      : `📝 参考答案：\n${q.answer}\n\n📖 思路：\n${formatAnalysisForCardDisplay(q.analysis)}`
 
     const aBlob = await renderToBlob(
       createCardElement(answerContent, platform, {
