@@ -55,7 +55,7 @@ const emit = defineEmits<{
         <span class="platform-icon">🎵</span>
         <div>
           <strong>抖音</strong>
-          <p>9:16 竖图 · 深色高对比</p>
+          <p>9:16 竖图 · 中心安全区 · 深色高对比</p>
         </div>
       </div>
       <div class="actions">
@@ -206,6 +206,18 @@ h3 {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
+}
+
+.platform-block.douyin .btn.secondary {
+  background: #fff;
+  color: #1a1a2e;
+  border: 1px solid #c5c5d0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.platform-block.douyin .btn.secondary:hover:not(:disabled) {
+  background: #f0f0f5;
+  border-color: #888;
 }
 
 .ready {

@@ -33,6 +33,8 @@ export interface Question {
   analysis: string
   difficulty: 'easy' | 'medium' | 'hard'
   expertTag?: string
+  /** 配图发布用思路名（无人名），如「速算思路」 */
+  expertStyleLabel?: string
   tags?: string[]
   /** 图形推理可视化数据 */
   tuxing?: TuxingData
@@ -102,6 +104,8 @@ export interface AiProviderOption {
 export interface ExamExpert {
   id: string
   name: string
+  /** 配图发布用思路名（无人名） */
+  publishLabel?: string
   modules: string[]
   specialty: string
   analysisPrefix: string

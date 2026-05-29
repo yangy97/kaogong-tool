@@ -25,8 +25,12 @@ function formatQuestionBlock(q: Question, index: number): string {
 function collectExpertTags(questions: Question[]): string[] {
   const set = new Set<string>()
   for (const q of questions) {
-    if (q.expertTag) set.add(q.expertTag)
-    q.tags?.forEach((t) => set.add(t))
+    if (q.expertStyleLabel) set.add(q.expertStyleLabel)
+    q.tags?.forEach((t) => {
+      if (!['花生十三', '高照', '聂佳', '龙飞', '阿里木江', '郭熙', '李梦娇', '刘文超', '白鹭'].includes(t)) {
+        set.add(t)
+      }
+    })
   }
   return [...set]
 }

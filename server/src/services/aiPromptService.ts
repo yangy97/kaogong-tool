@@ -10,12 +10,12 @@ export function buildAiPrompt(
   count: number,
   difficulty: string,
   topic?: ExamPoint,
-  expert?: { analysisPrefix: string },
+  expert?: { analysisPrefix: string; publishLabel?: string },
 ): string {
   const isTuxing = isTuxingTopicId(topic?.id)
   const isEssay = module.id === 'shenlun'
 
-  const analysisExample = expert
+  const analysisExample = expert?.analysisPrefix
     ? `${expert.analysisPrefix}2023比重=27.8/97.6≈28.5%；2022比重=12.1/56.3≈21.5%；差≈7%，选D。`
     : '2023比重≈28.5%；2022比重≈21.5%；差≈7%，选D。'
 

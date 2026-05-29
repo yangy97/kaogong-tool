@@ -9,10 +9,19 @@ const DRAFT_MARKER_RE =
   /\?\s*错[,，:：]?|不对[,，:：]|需重算|重新计算[:：]?|实际计算[:：]?|但选项无|选最接近的[^，。；?？]*[?？]\s*错[,，]?/gi
 
 /** 注入 system prompt（精简，避免与用户 prompt 重复） */
-export const ANALYSIS_PROMPT_RULES = `解析 analysis：列 2-3 个关键式子（；分隔）+ 结论 + 选X，≤150 字。禁止试算纠错、多种算法对比。`
+export const ANALYSIS_PROMPT_RULES =
+  '解析 analysis：列 2-3 个关键式子（；分隔）+ 结论 + 选X，≤150 字。禁止试算纠错。严禁出现任何人名、名师称谓、【】标签。'
+
+/** 去掉解析中的人名、名师【】标签（发布小红书/抖音用） */
+export function stripAnalysisBranding(text: string): string {
+  let s = text.trim()
+  while (/^【[^】]+】\s*/.test(s)) {
+    s = s.replace(/^【[^】]+】\s*/, '')
+  }
+  return s.trim()
+}
 
 export interface CompactAnalysisOptions {
-  expertPrefix?: string
   answer?: string
   isEssay?: boolean
 }
@@ -21,22 +30,12 @@ export interface CompactAnalysisOptions {
 export function compactAnalysis(text: string, options?: CompactAnalysisOptions): string {
   const maxLen = options?.isEssay ? ESSAY_ANALYSIS_MAX_LEN : ANALYSIS_MAX_LEN
 
-  let body = text.replace(/\s+/g, ' ').trim()
+  let body = stripAnalysisBranding(text.replace(/\s+/g, ' '))
   if (!body) {
-    const prefix = options?.expertPrefix?.trim() ?? ''
-    return prefix ? `${prefix}详见答案。` : '详见答案。'
+    return '详见答案。'
   }
 
   body = body.replace(VERBOSE_SECTION_RE, '')
-
-  let prefix = ''
-  const tagMatch = body.match(/^(【[^】]+】)\s*/)
-  if (tagMatch) {
-    prefix = tagMatch[1]
-    body = body.slice(tagMatch[0].length).trim()
-  } else if (options?.expertPrefix) {
-    prefix = options.expertPrefix.replace(/\s+$/, '')
-  }
 
   const segments = body.split(DRAFT_MARKER_RE).map((s) => s.trim()).filter(Boolean)
   if (segments.length > 1) {
@@ -76,38 +75,36 @@ export function compactAnalysis(text: string, options?: CompactAnalysisOptions):
     body += '。'
   }
 
-  let result = prefix ? `${prefix}${body}` : body
+  let result = stripAnalysisBranding(body)
 
   if (result.length > maxLen) {
     const tailMatch = result.match(/(选\s*[A-D])[。]?$/)
     const tail = tailMatch ? `${tailMatch[1]}。` : options?.answer ? `选${options.answer.toUpperCase()}。` : '。'
-    const prefixLen = prefix.length
     const budget = maxLen - tail.length
-    let core = prefix ? result.slice(prefixLen) : result
-    core = core.replace(/选\s*[A-D][。]?$/, '').trim()
+    let core = result.replace(/选\s*[A-D][。]?$/, '').trim()
 
-    if (core.length > budget - prefixLen) {
+    if (core.length > budget) {
       const parts = core.split(/[；。]/).filter(Boolean)
       if (parts.length > 1) {
         let kept = ''
         for (const p of parts) {
           const next = kept ? `${kept}；${p}` : p
-          if (next.length + tail.length + prefixLen <= maxLen) kept = next
+          if (next.length + tail.length <= maxLen) kept = next
           else break
         }
-        core = kept || core.slice(0, budget - prefixLen - 4) + '…'
+        core = kept || core.slice(0, budget - 4) + '…'
       } else {
-        core = core.slice(0, budget - prefixLen - 1)
+        core = core.slice(0, budget - 1)
         const punc = core.search(/[，；][^，；]*$/)
         if (punc > 20) core = core.slice(0, punc + 1)
-        else core = `${core.slice(0, budget - prefixLen - 4)}…`
+        else core = `${core.slice(0, budget - 4)}…`
       }
     }
 
-    result = prefix ? `${prefix}${core}${tail}` : `${core}${tail}`
+    result = `${core}${tail}`
   }
 
-  return result.trim()
+  return stripAnalysisBranding(result.trim())
 }
 
 /** 配图卡片：分号换行，便于阅读 */

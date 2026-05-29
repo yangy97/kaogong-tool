@@ -19,7 +19,7 @@ export function buildModuleSystemPrompt(module: ExamModule, expert?: ExamExpert)
     getModuleBaseHints(module.id),
   ]
   if (expert) {
-    parts.push(`名师解析：${expert.analysisPrefix} ${expert.stylePrompt}`)
+    parts.push(`解析风格 · ${expert.name}：${expert.stylePrompt} analysis 以「${expert.analysisPrefix}」开头。`)
   }
   return parts.filter(Boolean).join('\n')
 }

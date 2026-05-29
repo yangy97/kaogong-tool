@@ -33,6 +33,8 @@ export interface Question {
   difficulty: 'easy' | 'medium' | 'hard'
   /** AI 解析风格对应的名师标签 */
   expertTag?: string
+  /** 配图发布用思路名（无人名） */
+  expertStyleLabel?: string
   tags?: string[]
   /** 图形推理可视化数据 */
   tuxing?: TuxingData

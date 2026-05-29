@@ -74,23 +74,32 @@ export function parseStem(stem: string): StemSegment[] {
 }
 
 /** 转为 HTML（用于配图渲染） */
-export function stemToHtml(stem: string): string {
+export function stemToHtml(stem: string, options?: { dark?: boolean }): string {
+  const dark = options?.dark ?? false
+  const textColor = dark ? '#f0f0f0' : 'inherit'
+  const thStyle = dark
+    ? 'padding:8px 12px;border:1px solid rgba(255,255,255,0.25);background:rgba(0,242,234,0.18);color:#f0f0f0;font-weight:600;text-align:center;'
+    : 'padding:8px 12px;border:1px solid #ddd;background:#f5f5f5;font-weight:600;text-align:center;'
+  const tdStyle = dark
+    ? 'padding:8px 12px;border:1px solid rgba(255,255,255,0.2);text-align:center;color:#f0f0f0;'
+    : 'padding:8px 12px;border:1px solid #ddd;text-align:center;'
+
   const segments = parseStem(stem)
   return segments
     .map((seg) => {
       if (seg.type === 'text') {
-        return `<p style="margin:0 0 12px;line-height:1.8;">${escapeHtml(seg.text)}</p>`
+        return `<p style="margin:0 0 12px;line-height:1.8;color:${textColor};">${escapeHtml(seg.text)}</p>`
       }
       const header = seg.rows[0]!
       const body = seg.rows.slice(1)
-      const ths = header.map((c) => `<th style="padding:8px 12px;border:1px solid #ddd;background:#f5f5f5;font-weight:600;text-align:center;">${escapeHtml(c)}</th>`).join('')
+      const ths = header.map((c) => `<th style="${thStyle}">${escapeHtml(c)}</th>`).join('')
       const trs = body
         .map(
           (row) =>
-            `<tr>${row.map((c) => `<td style="padding:8px 12px;border:1px solid #ddd;text-align:center;">${escapeHtml(c)}</td>`).join('')}</tr>`,
+            `<tr>${row.map((c) => `<td style="${tdStyle}">${escapeHtml(c)}</td>`).join('')}</tr>`,
         )
         .join('')
-      return `<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:26px;"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`
+      return `<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:26px;color:${textColor};"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`
     })
     .join('')
 }

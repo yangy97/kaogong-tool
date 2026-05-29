@@ -237,7 +237,8 @@ export async function generateViaAi(
     topicId: topic?.id,
     topicName: topic?.name,
     expertTag: expert?.name,
-    tags: expert ? [expert.name, module.name] : undefined,
+    expertStyleLabel: expert?.publishLabel,
+    tags: expert ? [expert.publishLabel, module.name] : undefined,
     ...q,
   }))
 

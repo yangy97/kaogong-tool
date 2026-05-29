@@ -50,6 +50,9 @@ const PLATFORM_CONFIG = {
 
 const COVER_BRAND = '学行测'
 
+/** 抖音发布中心选封面时上下各裁约 12%，核心内容需落在中间 3:4 区域 */
+const DOUYIN_COVER_SAFE = { top: 260, bottom: 260 }
+
 /** 封面顶部品牌字描边（html2canvas 兼容） */
 function coverBrandTextShadow(stroke = 3): string {
   const shadows: string[] = []
@@ -105,7 +108,7 @@ function createCardElement(
     width: ${cfg.width}px;
     height: ${cfg.height}px;
     background: ${bg};
-    padding: ${platform === 'douyin' ? '80px 60px' : '60px'};
+    padding: ${platform === 'douyin' ? (isCover ? '0' : '80px 60px') : '60px'};
     box-sizing: border-box;
     font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
     color: ${isCover ? cfg.textOnCover : cfg.textOnCard};
@@ -118,25 +121,34 @@ function createCardElement(
   `
 
   if (isCover) {
-    const accentLine =
-      platform === 'douyin'
-        ? `<div style="width:120px;height:6px;background:linear-gradient(90deg,${cfg.accent},${(cfg as typeof PLATFORM_CONFIG.douyin).accent2});border-radius:3px;margin:0 auto 28px;"></div>`
-        : ''
-    const titleSize = platform === 'douyin' ? 72 : 80
-    const titleTop = platform === 'douyin' ? 72 : 120
-    el.innerHTML = `
-      <div style="flex:1;display:flex;flex-direction:column;height:100%;">
-        ${renderCoverBrandHeader(platform)}
-        <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;padding-top:${titleTop}px;">
-          ${accentLine}
-          <div style="font-size:${titleSize}px;font-weight:900;line-height:1.2;margin-bottom:20px;letter-spacing:1px;">${options.title}</div>
-          <div style="font-size:${platform === 'douyin' ? 36 : 40}px;opacity:0.88;font-weight:500;">${options.subtitle ?? ''}</div>
-          <div style="margin-top:auto;margin-bottom:48px;font-size:28px;opacity:0.85;padding:16px 40px;border:2px solid ${platform === 'douyin' ? cfg.accent : 'rgba(255,255,255,0.6)'};border-radius:40px;color:${platform === 'douyin' ? cfg.accent : 'inherit'};">
+    if (platform === 'douyin') {
+      const accent2 = (cfg as typeof PLATFORM_CONFIG.douyin).accent2
+      const safePad = `padding:${DOUYIN_COVER_SAFE.top}px 48px ${DOUYIN_COVER_SAFE.bottom}px`
+      el.innerHTML = `
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;${safePad};box-sizing:border-box;">
+          ${renderCoverBrandHeader(platform)}
+          <div style="width:120px;height:6px;background:linear-gradient(90deg,${cfg.accent},${accent2});border-radius:3px;margin:20px auto 24px;"></div>
+          <div style="font-size:64px;font-weight:900;line-height:1.2;margin-bottom:16px;letter-spacing:1px;">${options.title}</div>
+          <div style="font-size:34px;opacity:0.88;font-weight:500;margin-bottom:32px;">${options.subtitle ?? ''}</div>
+          <div style="font-size:26px;opacity:0.9;padding:14px 36px;border:2px solid ${cfg.accent};border-radius:40px;color:${cfg.accent};">
             ${cfg.coverBadge}
           </div>
         </div>
-      </div>
-    `
+      `
+    } else {
+      el.innerHTML = `
+        <div style="flex:1;display:flex;flex-direction:column;height:100%;">
+          ${renderCoverBrandHeader(platform)}
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;padding-top:120px;">
+            <div style="font-size:80px;font-weight:900;line-height:1.2;margin-bottom:20px;letter-spacing:1px;">${options.title}</div>
+            <div style="font-size:40px;opacity:0.88;font-weight:500;">${options.subtitle ?? ''}</div>
+            <div style="margin-top:auto;margin-bottom:48px;font-size:28px;opacity:0.85;padding:16px 40px;border:2px solid rgba(255,255,255,0.6);border-radius:40px;">
+              ${cfg.coverBadge}
+            </div>
+          </div>
+        </div>
+      `
+    }
   } else {
     const badge = options.index != null ? `第 ${options.index + 1} 题` : '解析'
     const accent2 = platform === 'douyin' ? (cfg as typeof PLATFORM_CONFIG.douyin).accent2 : cfg.accent
@@ -191,6 +203,44 @@ function buildCoverTitle(questions: Question[], platform: ImagePlatform): string
   return title.length > maxLen ? title.slice(0, maxLen - 1) + '…' : title
 }
 
+/** 配图解析：人名前缀 → 🐑🍊 思路名（仅用于小红书/抖音配图，不影响题目预览） */
+const PUBLISH_BRAND = '🐑🍊'
+
+const KNOWN_EXPERT_NAMES = [
+  '花生十三', '高照', '聂佳', '龙飞', '阿里木江', '郭熙', '李梦娇', '刘文超', '白鹭',
+]
+
+export function formatAnalysisForPublishImage(analysis: string, styleLabel?: string): string {
+  let body = analysis.trim()
+  let label = styleLabel?.trim() ?? ''
+
+  const dotTag = body.match(/^【[^·】]+·([^】]+)】\s*/)
+  if (dotTag) {
+    label = label || dotTag[1]!.trim()
+    body = body.slice(dotTag[0].length).trim()
+  } else {
+    const plainTag = body.match(/^【([^】]+)】\s*/)
+    if (plainTag) {
+      const inner = plainTag[1]!.trim()
+      if (!KNOWN_EXPERT_NAMES.some((n) => inner.startsWith(n))) {
+        label = label || inner
+      }
+      body = body.slice(plainTag[0].length).trim()
+    }
+  }
+
+  for (const name of KNOWN_EXPERT_NAMES) {
+    if (body.startsWith(name)) {
+      body = body.slice(name.length).replace(/^[·•\s]+/, '').trim()
+      break
+    }
+  }
+
+  const header = label ? `${PUBLISH_BRAND} ${label}` : PUBLISH_BRAND
+  const formatted = formatAnalysisForCardDisplay(body)
+  return `${header}\n${formatted}`
+}
+
 /** 配图解析区：分号换行，去掉啰嗦试算句 */
 function formatAnalysisForCardDisplay(analysis: string): string {
   const trimmed = analysis
@@ -233,7 +283,7 @@ export async function generatePlatformImages(
     const num = String(i + 1).padStart(2, '0')
 
     let content = q.stem
-    let contentHtml = stemToHtml(q.stem)
+    let contentHtml = stemToHtml(q.stem, { dark: platform === 'douyin' })
     if (q.tuxing) {
       contentHtml += tuxingToHtml(q.tuxing, { figureSize: 64, dark: platform === 'douyin' })
     } else if (q.options?.length) {
@@ -266,8 +316,8 @@ export async function generatePlatformImages(
     })
 
     const answerContent = q.options
-      ? `✅ 答案：${q.answer}\n\n📖 解析：\n${formatAnalysisForCardDisplay(q.analysis)}`
-      : `📝 参考答案：\n${q.answer}\n\n📖 思路：\n${formatAnalysisForCardDisplay(q.analysis)}`
+      ? `✅ 答案：${q.answer}\n\n📖 解析：\n${formatAnalysisForPublishImage(q.analysis, q.expertStyleLabel)}`
+      : `📝 参考答案：\n${q.answer}\n\n📖 思路：\n${formatAnalysisForPublishImage(q.analysis, q.expertStyleLabel)}`
 
     const aBlob = await renderToBlob(
       createCardElement(answerContent, platform, {
