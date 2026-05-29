@@ -1,4 +1,4 @@
-import type { TuxingData, TuxingFigure, TuxingGridFigure, TuxingShapesFigure } from '../types/tuxing.js'
+import type { TuxingData, TuxingFigure, TuxingGridFigure, TuxingShapesFigure } from '../types/tuxing'
 
 function isGridFigure(v: unknown): v is TuxingGridFigure {
   if (!v || typeof v !== 'object') return false

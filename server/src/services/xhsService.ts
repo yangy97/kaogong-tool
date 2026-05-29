@@ -1,5 +1,5 @@
-import type { Question, XhsPostContent } from '../types/index.js'
-import { DEFAULT_TAGS, DOUYIN_TAGS } from '../constants.js'
+import type { Question, XhsPostContent } from '../types/index'
+import { DEFAULT_TAGS, DOUYIN_TAGS } from '../constants'
 
 const DIFFICULTY_EMOJI: Record<string, string> = {
   easy: '🟢',

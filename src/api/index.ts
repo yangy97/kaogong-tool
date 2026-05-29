@@ -96,11 +96,17 @@ export const api = {
   getVocabCategories: () =>
     request<{ categories: import('@/types').VocabCategory[] }>('/vocab/categories'),
 
-  listVocab: (params: { categoryId?: string; keyword?: string; page?: number }) => {
+  listVocab: (params: {
+    categoryId?: string
+    keyword?: string
+    page?: number
+    pageSize?: number
+  }) => {
     const qs = new URLSearchParams()
     if (params.categoryId) qs.set('categoryId', params.categoryId)
-    if (params.keyword) qs.set('keyword', params.keyword)
+    if (params.keyword?.trim()) qs.set('keyword', params.keyword.trim())
     if (params.page) qs.set('page', String(params.page))
+    if (params.pageSize) qs.set('pageSize', String(params.pageSize))
     return request<{
       items: import('@/types').VocabItem[]
       total: number

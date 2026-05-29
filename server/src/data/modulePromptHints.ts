@@ -1,6 +1,6 @@
-import type { ExamModule, ExamPoint } from '../types/index.js'
-import { ANALYSIS_PROMPT_RULES } from '../utils/analysisNormalize.js'
-import type { ExamExpert } from './expertStyles.js'
+import type { ExamModule, ExamPoint } from '../types/index'
+import { ANALYSIS_PROMPT_RULES } from '../utils/analysisNormalize'
+import type { ExamExpert } from './expertStyles'
 
 const MODULE_SYSTEM_EXTRAS: Record<string, string> = {
   ziliao: '资料分析：完整材料表格+多步计算，禁止一步口算。',

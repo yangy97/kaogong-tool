@@ -1,13 +1,15 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import FormSelect from '@/components/FormSelect.vue'
 import type { SelectOption } from '@/components/FormSelect.vue'
 import type { VocabCategory, VocabItem, VocabWebLookupResult } from '@/types'
 
-defineProps<{
+const props = defineProps<{
   categories: VocabCategory[]
   selectedCategoryId: string
   vocabList: VocabItem[]
-  total: number
+  libraryTotal: number
+  filteredTotal: number
   loading: boolean
   webLoading?: boolean
   webLookup?: VocabWebLookupResult | null
@@ -23,6 +25,10 @@ const emit = defineEmits<{
 
 const keyword = defineModel<string>('keyword', { default: '' })
 const count = defineModel<number>('count', { default: 3 })
+
+const isFiltered = computed(
+  () => !!props.selectedCategoryId || !!keyword.value.trim(),
+)
 
 const SOURCE_LABEL: Record<string, string> = {
   youdao: '有道词典',
@@ -44,7 +50,11 @@ function openLink(url: string) {
     <div class="vocab-head">
       <div>
         <h2>700 高频词</h2>
-        <p>共 {{ total }} 个高频成语、实词、关联词与政策热词 · 库内搜索与联网查词均不消耗 AI Token</p>
+        <p>
+          库内共 {{ libraryTotal }} 条去重词条
+          <template v-if="isFiltered">，当前筛选 {{ filteredTotal }} 条</template>
+          · 库内搜索与联网查词均不消耗 AI Token
+        </p>
       </div>
     </div>
 

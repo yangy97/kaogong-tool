@@ -1,5 +1,5 @@
-import type { VocabCategory, VocabItem } from '../types/index.js'
-import { EXTRA_VOCAB_RAW } from './words700-extra.js'
+import type { VocabCategory, VocabItem } from '../types/index'
+import { EXTRA_VOCAB_RAW } from './words700-extra'
 
 export const VOCAB_CATEGORIES: VocabCategory[] = [
   { id: 'chengyu', name: '高频成语', description: '公考言语高频成语积累' },

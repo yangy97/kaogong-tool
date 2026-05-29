@@ -4,13 +4,13 @@ import {
   EXAM_POINT_MAP,
   MODULE_MAP,
   getPointsByModule,
-} from '../constants.js'
-import { generateQuestions } from '../services/questionService.js'
-import { getExpertsForModule } from '../data/expertStyles.js'
-import { getAiConfig, getAllProviders, isAnyAiConfigured, getDefaultProviderId } from '../config/aiConfig.js'
-import { devGroup, devLog, isDevMode, preview } from '../utils/devLog.js'
-import { isAbortError } from '../utils/abort.js'
-import type { Question } from '../types/index.js'
+} from '../constants'
+import { generateQuestions } from '../services/questionService'
+import { getExpertsForModule } from '../data/expertStyles'
+import { getAiConfig, getAllProviders, isAnyAiConfigured, getDefaultProviderId } from '../config/aiConfig'
+import { devGroup, devLog, isDevMode, preview } from '../utils/devLog'
+import { isAbortError } from '../utils/abort'
+import type { Question } from '../types/index'
 
 const router = Router()
 

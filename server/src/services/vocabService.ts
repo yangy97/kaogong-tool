@@ -1,10 +1,10 @@
-import type { Question, VocabItem } from '../types/index.js'
+import type { Question, VocabItem } from '../types/index'
 import {
   VOCAB_CATEGORIES,
   VOCAB_ITEMS,
   getVocabByCategory,
   searchVocab,
-} from '../data/words700.js'
+} from '../data/words700'
 
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr]
@@ -22,13 +22,34 @@ export function listVocabCategories() {
   }))
 }
 
+export function filterVocabItems(options: { categoryId?: string; keyword?: string }): VocabItem[] {
+  const { categoryId, keyword } = options
+  const kw = keyword?.trim() ?? ''
+  let items = categoryId ? getVocabByCategory(categoryId) : VOCAB_ITEMS
+  if (kw) {
+    const q = kw.toLowerCase()
+    items = items.filter(
+      (v) =>
+        v.word.includes(kw) ||
+        v.word.toLowerCase().includes(q) ||
+        v.meaning.includes(kw) ||
+        v.example?.includes(kw),
+    )
+  }
+  return items
+}
+
 export function listVocab(options: { categoryId?: string; keyword?: string; page?: number; pageSize?: number }) {
-  const { categoryId, keyword, page = 1, pageSize = 50 } = options
-  let items = keyword ? searchVocab(keyword) : getVocabByCategory(categoryId)
+  const { categoryId, keyword, page = 1, pageSize = 500 } = options
+  const items = filterVocabItems({ categoryId, keyword })
   const total = items.length
   const start = (page - 1) * pageSize
-  items = items.slice(start, start + pageSize)
-  return { items, total, page, pageSize }
+  return {
+    items: items.slice(start, start + pageSize),
+    total,
+    page,
+    pageSize,
+  }
 }
 
 export function generateVocabQuestions(

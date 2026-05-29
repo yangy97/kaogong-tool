@@ -1,13 +1,13 @@
-import type { ExamModule, ExamPoint } from '../types/index.js'
-import { generateViaAi, getAiConfig } from './aiService.js'
-import type { AiProviderId } from '../config/aiConfig.js'
-import { throwIfAborted } from '../utils/abort.js'
+import type { ExamModule, ExamPoint } from '../types/index'
+import { generateViaAi, getAiConfig } from './aiService'
+import type { AiProviderId } from '../config/aiConfig'
+import { throwIfAborted } from '../utils/abort'
 
 type GenSource = 'ai'
 type GenMode = string
 
 export interface GenerateResult {
-  questions: import('../types/index.js').Question[]
+  questions: import('../types/index').Question[]
   source: GenSource
   mode: GenMode
 }

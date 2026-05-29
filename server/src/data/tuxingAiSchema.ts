@@ -1,4 +1,4 @@
-import { isTuxingTopicId } from '../types/tuxing.js'
+import { isTuxingTopicId } from '../types/tuxing'
 
 /** 图形推理 AI 输出规范（精简，降低 input token） */
 export function buildTuxingAiPromptBlock(): string {

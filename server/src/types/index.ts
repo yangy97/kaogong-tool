@@ -1,4 +1,4 @@
-import type { TuxingData } from './tuxing.js'
+import type { TuxingData } from './tuxing'
 
 export interface ExamModule {
   id: string

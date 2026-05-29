@@ -1,13 +1,13 @@
 import { Router } from 'express'
-import type { Question } from '../types/index.js'
-import { XHS_CREATOR_URL, DOUYIN_CREATOR_URL } from '../constants.js'
+import type { Question } from '../types/index'
+import { XHS_CREATOR_URL, DOUYIN_CREATOR_URL } from '../constants'
 import {
   buildDouyinPost,
   buildXhsPost,
   formatCopyText,
   formatDouyinCopyText,
-} from '../services/xhsService.js'
-import { devGroup, devLog, isDevMode, preview } from '../utils/devLog.js'
+} from '../services/xhsService'
+import { devGroup, devLog, isDevMode, preview } from '../utils/devLog'
 
 const router = Router()
 

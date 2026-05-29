@@ -1,5 +1,5 @@
-import { searchVocab } from '../data/words700.js'
-import type { VocabItem } from '../types/index.js'
+import { searchVocab } from '../data/words700'
+import type { VocabItem } from '../types/index'
 
 export interface VocabWebLink {
   name: string

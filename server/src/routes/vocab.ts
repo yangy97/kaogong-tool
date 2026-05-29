@@ -5,8 +5,8 @@ import {
   getVocabStats,
   listVocab,
   listVocabCategories,
-} from '../services/vocabService.js'
-import { lookupVocabOnline } from '../services/vocabWebLookup.js'
+} from '../services/vocabService'
+import { lookupVocabOnline } from '../services/vocabWebLookup'
 
 const router = Router()
 
@@ -25,7 +25,7 @@ router.get('/list', (req, res) => {
       categoryId: categoryId as string | undefined,
       keyword: keyword as string | undefined,
       page: page ? Number(page) : 1,
-      pageSize: pageSize ? Number(pageSize) : 50,
+      pageSize: pageSize ? Number(pageSize) : 500,
     }),
   )
 })

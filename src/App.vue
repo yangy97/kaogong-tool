@@ -90,7 +90,10 @@ function handleCancelGenerate() {
 }
 
 const vocabCategories = ref<VocabCategory[]>([])
-const vocabTotal = ref(0)
+/** 词库总词条数（去重后） */
+const vocabLibraryTotal = ref(0)
+/** 当前筛选结果条数 */
+const vocabFilteredTotal = ref(0)
 const selectedVocabCategory = ref('')
 const vocabKeyword = ref('')
 const vocabList = ref<VocabItem[]>([])
@@ -233,18 +236,21 @@ async function loadVocabMeta() {
     api.getVocabStats(),
     api.getVocabCategories(),
   ])
-  vocabTotal.value = stats.total
+  vocabLibraryTotal.value = stats.total
   vocabCategories.value = cats.categories
 }
 
 async function loadVocabList() {
+  const categoryId = selectedVocabCategory.value || undefined
+  const keyword = vocabKeyword.value.trim() || undefined
   const res = await api.listVocab({
-    categoryId: selectedVocabCategory.value || undefined,
-    keyword: vocabKeyword.value || undefined,
+    categoryId,
+    keyword,
     page: 1,
+    pageSize: 1000,
   })
   vocabList.value = res.items
-  vocabTotal.value = res.total
+  vocabFilteredTotal.value = res.total
 }
 
 onMounted(async () => {
@@ -371,6 +377,7 @@ async function handleVocabGenerate() {
 
 async function handleVocabCategory(id: string) {
   selectedVocabCategory.value = id
+  vocabKeyword.value = ''
   vocabWebLookup.value = null
   await loadVocabList()
 }
@@ -392,8 +399,10 @@ async function handleVocabWebSearch(keyword: string) {
   try {
     const result = await api.webLookupVocab(q)
     vocabWebLookup.value = result
-    vocabList.value = result.local.length ? result.local : vocabList.value
-    vocabTotal.value = result.local.length || vocabTotal.value
+    if (result.local.length) {
+      vocabList.value = result.local
+      vocabFilteredTotal.value = result.local.length
+    }
     if (result.web) {
       showToast(`已查到「${result.web.word}」在线释义`)
     } else if (result.local.length) {
@@ -627,7 +636,8 @@ async function handleCopyDouyin() {
           :categories="vocabCategories"
           :selected-category-id="selectedVocabCategory"
           :vocab-list="vocabList"
-          :total="vocabTotal"
+          :library-total="vocabLibraryTotal"
+          :filtered-total="vocabFilteredTotal"
           :loading="loading"
           :web-loading="vocabWebLoading"
           :web-lookup="vocabWebLookup"

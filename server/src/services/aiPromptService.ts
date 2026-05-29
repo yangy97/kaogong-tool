@@ -1,9 +1,9 @@
-import type { ExamModule, ExamPoint } from '../types/index.js'
-import { DIFFICULTY_LABELS } from '../constants.js'
-import { getModulePromptHints } from '../data/modulePromptHints.js'
-import { buildStrictDifficultyBlock, type Difficulty } from '../utils/difficultyConfig.js'
-import { buildTuxingPromptIfNeeded } from '../data/tuxingAiSchema.js'
-import { isTuxingTopicId } from '../types/tuxing.js'
+import type { ExamModule, ExamPoint } from '../types/index'
+import { DIFFICULTY_LABELS } from '../constants'
+import { getModulePromptHints } from '../data/modulePromptHints'
+import { buildStrictDifficultyBlock, type Difficulty } from '../utils/difficultyConfig'
+import { buildTuxingPromptIfNeeded } from '../data/tuxingAiSchema'
+import { isTuxingTopicId } from '../types/tuxing'
 
 export function buildAiPrompt(
   module: ExamModule,

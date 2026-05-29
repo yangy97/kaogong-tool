@@ -1,18 +1,18 @@
-import type { ExamModule, ExamPoint, Question } from '../types/index.js'
-import type { TuxingData } from '../types/tuxing.js'
-import { getAiConfig } from '../config/aiConfig.js'
-import { buildAiPrompt } from './aiPromptService.js'
-import { getExpertById } from '../data/expertStyles.js'
-import { buildModuleSystemPrompt } from '../data/modulePromptHints.js'
-import { buildStrictDifficultyBlock, getAiTemperature, type Difficulty } from '../utils/difficultyConfig.js'
-import { normalizeStemTables } from '../utils/stemFormat.js'
-import { compactAnalysis } from '../utils/analysisNormalize.js'
-import { normalizeTuxingFromAi } from '../utils/tuxingNormalize.js'
-import { isTuxingTopicId } from '../types/tuxing.js'
-import { devGroup, devLog, preview } from '../utils/devLog.js'
+import type { ExamModule, ExamPoint, Question } from '../types/index'
+import type { TuxingData } from '../types/tuxing'
+import { getAiConfig } from '../config/aiConfig'
+import { buildAiPrompt } from './aiPromptService'
+import { getExpertById } from '../data/expertStyles'
+import { buildModuleSystemPrompt } from '../data/modulePromptHints'
+import { buildStrictDifficultyBlock, getAiTemperature, type Difficulty } from '../utils/difficultyConfig'
+import { normalizeStemTables } from '../utils/stemFormat'
+import { compactAnalysis } from '../utils/analysisNormalize'
+import { normalizeTuxingFromAi } from '../utils/tuxingNormalize'
+import { isTuxingTopicId } from '../types/tuxing'
+import { devGroup, devLog, preview } from '../utils/devLog'
 
-export { getAiConfig, SUPPORTED_AI_MODELS } from '../config/aiConfig.js'
-export type { AiModelOption, AiRuntimeConfig } from '../config/aiConfig.js'
+export { getAiConfig, SUPPORTED_AI_MODELS } from '../config/aiConfig'
+export type { AiModelOption, AiRuntimeConfig } from '../config/aiConfig'
 
 interface AiQuestionRaw {
   type: 'single' | 'multiple' | 'essay'
@@ -256,4 +256,4 @@ export function isAiConfigured(): boolean {
   return getAiConfig().configured
 }
 
-export { getAllProviders, isAnyAiConfigured, getDefaultProviderId } from '../config/aiConfig.js'
+export { getAllProviders, isAnyAiConfigured, getDefaultProviderId } from '../config/aiConfig'

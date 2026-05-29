@@ -4,10 +4,10 @@ import { fileURLToPath } from 'url'
 import cors from 'cors'
 import express from 'express'
 import fs from 'fs'
-import { getAllProviders, isAnyAiConfigured, getDefaultProviderId } from './config/aiConfig.js'
-import questionsRouter from './routes/questions.js'
-import vocabRouter from './routes/vocab.js'
-import xhsRouter from './routes/xhs.js'
+import { getAllProviders, isAnyAiConfigured, getDefaultProviderId } from './config/aiConfig'
+import questionsRouter from './routes/questions'
+import vocabRouter from './routes/vocab'
+import xhsRouter from './routes/xhs'
 
 const serverRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 dotenv.config({ path: path.join(serverRoot, '.env') })
