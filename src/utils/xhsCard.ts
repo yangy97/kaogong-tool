@@ -53,8 +53,15 @@ const COVER_BRAND = '学行测'
 /** 抖音发布中心选封面时上下各裁约 12%，核心内容需落在中间 3:4 区域 */
 const DOUYIN_COVER_SAFE = { top: 260, bottom: 260 }
 
+/** 封面品牌「🐑🍊 学行测」字号与描边（白字黑边，html2canvas 用 text-shadow 模拟） */
+const COVER_BRAND_FONT = { douyin: 96, xhs: 82 } as const
+const COVER_BRAND_STROKE = 5
+
+/** 封面内容区整体下移（相对垂直居中/顶对齐的偏移） */
+const COVER_CONTENT_TOP = { douyin: 800, xhs: 200 } as const
+
 /** 封面顶部品牌字描边（html2canvas 兼容） */
-function coverBrandTextShadow(stroke = 3): string {
+function coverBrandTextShadow(stroke = COVER_BRAND_STROKE): string {
   const shadows: string[] = []
   for (let dx = -stroke; dx <= stroke; dx++) {
     for (let dy = -stroke; dy <= stroke; dy++) {
@@ -65,17 +72,20 @@ function coverBrandTextShadow(stroke = 3): string {
 }
 
 function renderCoverBrandHeader(platform: ImagePlatform): string {
-  const fontSize = platform === 'douyin' ? 64 : 56
+  const fontSize = COVER_BRAND_FONT[platform]
+  const stroke = coverBrandTextShadow()
   return `
-    <div style="text-align:center;margin-bottom:24px;flex-shrink:0;">
-      <span style="display:inline-flex;align-items:center;justify-content:center;gap:4px;line-height:1.2;">
-        <span style="font-size:${fontSize}px;">🐑🍊</span>
+    <div style="text-align:center;margin-bottom:28px;flex-shrink:0;">
+      <span style="display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1.15;">
+        <span style="font-size:${fontSize}px;line-height:1;">🐑🍊</span>
         <span style="
           font-size:${fontSize}px;
           font-weight:900;
+          font-family:-apple-system,'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif;
           color:#fff;
-          letter-spacing:2px;
-          text-shadow:${coverBrandTextShadow(3)};
+          letter-spacing:3px;
+          text-shadow:${stroke};
+          -webkit-text-stroke:1px #000;
         ">${COVER_BRAND}</span>
       </span>
     </div>
@@ -123,9 +133,9 @@ function createCardElement(
   if (isCover) {
     if (platform === 'douyin') {
       const accent2 = (cfg as typeof PLATFORM_CONFIG.douyin).accent2
-      const safePad = `padding:${DOUYIN_COVER_SAFE.top}px 48px ${DOUYIN_COVER_SAFE.bottom}px`
+      const coverPad = `padding:${COVER_CONTENT_TOP.douyin}px 48px ${DOUYIN_COVER_SAFE.bottom}px`
       el.innerHTML = `
-        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;${safePad};box-sizing:border-box;">
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;${coverPad};box-sizing:border-box;">
           ${renderCoverBrandHeader(platform)}
           <div style="width:120px;height:6px;background:linear-gradient(90deg,${cfg.accent},${accent2});border-radius:3px;margin:20px auto 24px;"></div>
           <div style="font-size:64px;font-weight:900;line-height:1.2;margin-bottom:16px;letter-spacing:1px;">${options.title}</div>
@@ -137,9 +147,9 @@ function createCardElement(
       `
     } else {
       el.innerHTML = `
-        <div style="flex:1;display:flex;flex-direction:column;height:100%;">
+        <div style="flex:1;display:flex;flex-direction:column;height:100%;padding-top:${COVER_CONTENT_TOP.xhs}px;box-sizing:border-box;">
           ${renderCoverBrandHeader(platform)}
-          <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;padding-top:120px;">
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;padding-top:48px;">
             <div style="font-size:80px;font-weight:900;line-height:1.2;margin-bottom:20px;letter-spacing:1px;">${options.title}</div>
             <div style="font-size:40px;opacity:0.88;font-weight:500;">${options.subtitle ?? ''}</div>
             <div style="margin-top:auto;margin-bottom:48px;font-size:28px;opacity:0.85;padding:16px 40px;border:2px solid rgba(255,255,255,0.6);border-radius:40px;">
