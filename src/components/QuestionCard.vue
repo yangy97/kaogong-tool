@@ -13,20 +13,37 @@ const diffLabel: Record<string, string> = {
   medium: '中等',
   hard: '困难',
 }
+
+const diffType: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
+  easy: 'success',
+  medium: 'info',
+  hard: 'danger',
+}
 </script>
 
 <template>
-  <article class="question-card">
-    <header>
-      <span class="index">#{{ index + 1 }}</span>
-      <span v-if="question.expertTag" class="expert">{{ question.expertTag }}解析</span>
-      <span v-if="question.topicName" class="topic">{{ question.topicName }}</span>
-      <span v-if="question.tuxing" class="tuxing-tag">AI 图形</span>
-      <span class="module">{{ question.moduleName }}</span>
-      <span class="diff" :data-level="question.difficulty">
+  <el-card class="question-card" shadow="never">
+    <div class="question-head">
+      <el-tag type="danger" effect="dark" round>#{{ index + 1 }}</el-tag>
+      <el-tag v-if="question.expertTag" type="warning" size="small">
+        {{ question.expertTag }}解析
+      </el-tag>
+      <el-tag v-if="question.topicName" type="primary" size="small" effect="plain">
+        {{ question.topicName }}
+      </el-tag>
+      <el-tag v-if="question.tuxing" color="#f3e5f5" style="color: #7b1fa2; border: none" size="small">
+        AI 图形
+      </el-tag>
+      <el-text type="info" size="small">{{ question.moduleName }}</el-text>
+      <el-tag
+        :type="diffType[question.difficulty] ?? 'info'"
+        size="small"
+        effect="plain"
+        class="diff-tag"
+      >
         {{ diffLabel[question.difficulty] }}
-      </span>
-    </header>
+      </el-tag>
+    </div>
 
     <StemContent :content="question.stem" class="stem" />
 
@@ -38,84 +55,31 @@ const diffLabel: Record<string, string> = {
       </li>
     </ul>
 
-    <details class="answer-block">
-      <summary>查看答案与解析</summary>
-      <p><strong>答案：</strong>{{ question.answer }}</p>
-      <p><strong>解析：</strong>{{ question.analysis }}</p>
-    </details>
-  </article>
+    <el-collapse class="answer-collapse">
+      <el-collapse-item title="查看答案与解析" name="answer">
+        <p><strong>答案：</strong>{{ question.answer }}</p>
+        <p class="analysis"><strong>解析：</strong>{{ question.analysis }}</p>
+      </el-collapse-item>
+    </el-collapse>
+  </el-card>
 </template>
 
 <style scoped>
 .question-card {
-  background: var(--card);
-  border-radius: var(--radius);
-  padding: 20px;
+  border: none;
   box-shadow: var(--shadow);
 }
 
-header {
+.question-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
-.index {
-  background: var(--primary);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 2px 10px;
-  border-radius: 20px;
-}
-
-.module {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.topic {
-  font-size: 12px;
-  padding: 2px 8px;
-  background: #e3f2fd;
-  color: #1565c0;
-  border-radius: 4px;
-}
-
-.tuxing-tag {
-  font-size: 12px;
-  padding: 2px 8px;
-  background: #f3e5f5;
-  color: #7b1fa2;
-  border-radius: 4px;
-}
-
-.expert {
-  font-size: 12px;
-  padding: 2px 8px;
-  background: #fff3e0;
-  color: #e65100;
-  border-radius: 4px;
-  font-weight: 600;
-}
-
-.diff {
+.diff-tag {
   margin-left: auto;
-  font-size: 12px;
-  padding: 2px 10px;
-  border-radius: 20px;
-  background: #f0f0f0;
-}
-
-.diff[data-level='easy'] {
-  background: #e8f5e9;
-  color: #2e7d32;
-}
-
-.diff[data-level='hard'] {
-  background: #fce4ec;
-  color: #c62828;
 }
 
 .stem {
@@ -128,7 +92,7 @@ header {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .options li {
@@ -138,22 +102,20 @@ header {
   font-size: 15px;
 }
 
-.answer-block {
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
+.answer-collapse {
+  border-top: 1px solid var(--el-border-color-lighter);
+  margin-top: 4px;
 }
 
-.answer-block summary {
-  cursor: pointer;
-  color: var(--primary);
+.answer-collapse :deep(.el-collapse-item__header) {
+  color: var(--el-color-primary);
   font-weight: 600;
-  font-size: 14px;
+  border: none;
 }
 
-.answer-block p {
+.analysis {
   margin-top: 10px;
-  font-size: 14px;
-  color: var(--text-secondary);
+  color: var(--el-text-color-secondary);
   line-height: 1.7;
 }
 </style>

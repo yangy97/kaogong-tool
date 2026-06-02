@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import FormSelect from '@/components/FormSelect.vue'
-import type { SelectOption } from '@/components/FormSelect.vue'
+import type { SelectOption } from '@/types/form'
 import type { VocabCategory, VocabItem, VocabWebLookupResult } from '@/types'
 
 const props = defineProps<{
@@ -43,23 +42,32 @@ function sourceLabel(source: string): string {
 function openLink(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
+
+function onSearch() {
+  emit('search', keyword.value)
+}
+
+function onWebSearch() {
+  emit('webSearch', keyword.value)
+}
 </script>
 
 <template>
-  <section class="vocab-panel">
-    <div class="vocab-head">
+  <el-card class="vocab-panel panel-in-shell" shadow="never">
+    <template #header>
       <div>
-        <h2>700 高频词</h2>
-        <p>
+        <span class="vocab-title">700 高频词</span>
+        <p class="vocab-desc">
           库内共 {{ libraryTotal }} 条去重词条
           <template v-if="isFiltered">，当前筛选 {{ filteredTotal }} 条</template>
           · 库内搜索与联网查词均不消耗 AI Token
         </p>
       </div>
-    </div>
+    </template>
 
     <div class="category-grid">
       <button
+        type="button"
         class="cat-chip"
         :class="{ active: selectedCategoryId === '' }"
         @click="emit('selectCategory', '')"
@@ -69,6 +77,7 @@ function openLink(url: string) {
       <button
         v-for="cat in categories"
         :key="cat.id"
+        type="button"
         class="cat-chip"
         :class="{ active: cat.id === selectedCategoryId }"
         @click="emit('selectCategory', cat.id)"
@@ -79,232 +88,255 @@ function openLink(url: string) {
     </div>
 
     <div class="search-row">
-      <input
+      <el-input
         v-model="keyword"
-        type="search"
+        size="large"
+        clearable
         placeholder="输入词语，库内搜或联网查…"
-        @keyup.enter="emit('search', keyword)"
+        class="search-input"
+        @keyup.enter="onSearch"
       />
-      <button class="search-btn" :disabled="loading || webLoading" @click="emit('search', keyword)">
+      <el-button size="large" :disabled="loading || webLoading" @click="onSearch">
         库内搜
-      </button>
-      <button
-        class="web-btn"
+      </el-button>
+      <el-button
+        size="large"
+        type="primary"
+        plain
         :disabled="loading || webLoading || !keyword.trim()"
-        @click="emit('webSearch', keyword)"
+        :loading="webLoading"
+        @click="onWebSearch"
       >
-        {{ webLoading ? '查询中…' : '🌐 联网查' }}
-      </button>
+        🌐 联网查
+      </el-button>
     </div>
 
     <div class="generate-row">
       <label class="count-field">
         <span class="count-label">生成题数</span>
-        <FormSelect v-model="count" :options="countOptions" :disabled="loading" />
+        <el-select v-model="count" size="large" :disabled="loading" class="count-select">
+          <el-option
+            v-for="opt in countOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
       </label>
-      <button class="gen-btn" :disabled="loading" @click="emit('generate')">
-        {{ loading ? '生成中…' : '✨ 生成词汇题' }}
-      </button>
+      <el-button
+        type="primary"
+        size="large"
+        class="gen-btn"
+        :disabled="loading"
+        :loading="loading"
+        @click="emit('generate')"
+      >
+        ✨ 生成词汇题
+      </el-button>
     </div>
 
-    <div v-if="webLookup" class="web-result">
-      <div class="web-result-head">
-        <strong>联网结果 · 「{{ webLookup.keyword }}」</strong>
-        <span v-if="webLookup.web" class="web-source">来源：{{ sourceLabel(webLookup.web.source) }}</span>
-      </div>
+    <el-alert
+      v-if="webLookup"
+      type="info"
+      :closable="false"
+      class="web-result"
+    >
+      <template #title>
+        <span>联网结果 · 「{{ webLookup.keyword }}」</span>
+        <span v-if="webLookup.web" class="web-source">
+          来源：{{ sourceLabel(webLookup.web.source) }}
+        </span>
+      </template>
       <p v-if="webLookup.web" class="web-meaning">
         <strong>{{ webLookup.web.word }}</strong>
         <span v-if="webLookup.web.pinyin" class="web-pinyin">（{{ webLookup.web.pinyin }}）</span>
         ：{{ webLookup.web.meaning }}
-        <button
+        <el-button
           v-if="webLookup.web.sourceUrl"
-          type="button"
-          class="link-btn"
+          type="primary"
+          link
+          size="small"
           @click="openLink(webLookup.web!.sourceUrl)"
         >
           查看原文
-        </button>
+        </el-button>
       </p>
       <p v-else class="web-meaning muted">未拉到在线释义，可点击下方链接在浏览器中查看</p>
       <p v-if="webLookup.local.length" class="web-local-hint">
         库内匹配 {{ webLookup.local.length }} 条（见下方列表）
       </p>
       <div class="web-links">
-        <button
+        <el-button
           v-for="link in webLookup.links"
           :key="link.url"
-          type="button"
-          class="ext-link"
+          size="small"
+          round
           @click="openLink(link.url)"
         >
           {{ link.name }} ↗
-        </button>
+        </el-button>
       </div>
-    </div>
+    </el-alert>
 
     <div v-if="vocabList.length" class="vocab-list">
       <article v-for="item in vocabList" :key="item.id" class="vocab-card">
-        <header>
-          <strong>{{ item.word }}</strong>
+        <header class="vocab-card-head">
+          <strong class="word">{{ item.word }}</strong>
           <span class="type">{{ item.type }}</span>
         </header>
         <p class="meaning">{{ item.meaning }}</p>
-        <p v-if="item.example" class="example">例：{{ item.example }}</p>
-        <p v-if="item.confusable?.length" class="confusable">
+        <p v-if="item.example" class="extra">例：{{ item.example }}</p>
+        <p v-if="item.confusable?.length" class="extra">
           辨析：{{ item.confusable.join('；') }}
         </p>
       </article>
     </div>
-  </section>
+  </el-card>
 </template>
 
 <style scoped>
 .vocab-panel {
-  background: var(--card);
-  border-radius: var(--radius);
-  padding: 24px;
-  box-shadow: var(--shadow);
   margin-bottom: 24px;
 }
 
-.vocab-head h2 {
+.vocab-title {
   font-size: 18px;
-  margin-bottom: 4px;
+  font-weight: 700;
 }
 
-.vocab-head p {
+.vocab-desc {
+  margin-top: 4px;
   font-size: 13px;
   color: var(--text-secondary);
+  line-height: 1.5;
 }
 
+/* 分类标签：等高胶囊 */
 .category-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 16px 0;
+  margin-bottom: 16px;
+  align-items: stretch;
 }
 
 .cat-chip {
-  padding: 6px 12px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: var(--ui-radius-pill, 20px);
+  border: 1px solid var(--ui-border, #eee);
   background: var(--bg);
   font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1.2;
+}
+
+.cat-chip:hover {
+  border-color: var(--el-color-primary-light-5);
+  color: var(--el-color-primary);
 }
 
 .cat-chip.active {
-  background: var(--primary-light);
-  border-color: var(--primary);
-  color: var(--primary);
+  background: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+  font-weight: 600;
 }
 
 .count {
   font-size: 11px;
-  background: rgba(0, 0, 0, 0.06);
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  line-height: 1.2;
 }
 
-.search-row,
-.generate-row {
+.cat-chip.active .count {
+  background: rgba(255, 36, 66, 0.12);
+}
+
+.search-row {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
   flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
+  margin-bottom: 16px;
 }
 
-.search-row input {
+.search-input {
   flex: 1;
   min-width: 180px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 14px;
-}
-
-.search-btn,
-.web-btn,
-.gen-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.search-btn {
-  background: var(--bg);
-  border: 1px solid var(--border);
-}
-
-.web-btn {
-  background: #e8f4fd;
-  border: 1px solid #90caf9;
-  color: #1565c0;
-}
-
-.web-btn:disabled {
-  opacity: 0.6;
 }
 
 .generate-row {
-  padding: 12px 0 4px;
-  border-top: 1px dashed var(--border);
-  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 16px 0 4px;
+  margin-bottom: 16px;
+  border-top: 1px dashed var(--ui-border, #eee);
 }
 
 .count-field {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
 }
 
 .count-label {
   font-size: 13px;
   color: var(--text-secondary);
-  white-space: nowrap;
+  font-weight: 500;
+}
+
+.count-select {
+  width: 140px;
 }
 
 .gen-btn {
-  background: var(--primary);
-  color: #fff;
-  margin-left: auto;
+  flex: 1;
+  min-width: 160px;
+  max-width: 280px;
 }
 
-.gen-btn:disabled {
-  opacity: 0.6;
+@media (max-width: 576px) {
+  .gen-btn {
+    max-width: none;
+    width: 100%;
+  }
+
+  .count-select {
+    width: 100%;
+  }
+
+  .count-field {
+    width: 100%;
+  }
 }
 
 .web-result {
-  background: #f0f7ff;
-  border: 1px solid #bbdefb;
-  border-radius: 10px;
-  padding: 14px 16px;
   margin-bottom: 16px;
-}
-
-.web-result-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-size: 14px;
+  border-radius: 10px;
 }
 
 .web-source {
+  margin-left: 8px;
   font-size: 12px;
   color: var(--text-secondary);
-  font-weight: 400;
 }
 
 .web-meaning {
   font-size: 14px;
   line-height: 1.6;
-  margin-bottom: 8px;
+  margin-top: 8px;
 }
 
 .web-meaning.muted {
@@ -314,77 +346,75 @@ function openLink(url: string) {
 .web-local-hint {
   font-size: 12px;
   color: var(--text-secondary);
-  margin-bottom: 8px;
-}
-
-.link-btn {
-  margin-left: 8px;
-  padding: 2px 8px;
-  font-size: 12px;
-  color: #1565c0;
-  background: #fff;
-  border: 1px solid #90caf9;
-  border-radius: 4px;
+  margin-top: 8px;
 }
 
 .web-links {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 8px;
 }
 
-.ext-link {
-  padding: 4px 10px;
-  font-size: 12px;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--primary);
-}
-
+/* 词卡网格：等高对齐 */
 .vocab-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 12px;
-  max-height: 400px;
+  max-height: 420px;
   overflow-y: auto;
+  align-items: stretch;
 }
 
 .vocab-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 100px;
+  height: 100%;
+  padding: 14px;
   background: var(--bg);
-  border-radius: 8px;
-  padding: 12px;
+  border: 1px solid var(--ui-border, #eee);
+  border-radius: var(--ui-radius, 12px);
+  transition: box-shadow 0.2s;
 }
 
-.vocab-card header {
+.vocab-card:hover {
+  box-shadow: var(--ui-shadow, 0 2px 12px rgba(0, 0, 0, 0.06));
+}
+
+.vocab-card-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
-.vocab-card strong {
+.word {
   font-size: 16px;
-  color: var(--primary);
+  color: var(--el-color-primary);
 }
 
 .type {
   font-size: 11px;
-  padding: 1px 6px;
-  background: var(--primary-light);
-  color: var(--primary);
-  border-radius: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font-weight: 500;
+  flex-shrink: 0;
 }
 
 .meaning {
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
+  flex: 1;
 }
 
-.example,
-.confusable {
+.extra {
   font-size: 12px;
   color: var(--text-secondary);
-  margin-top: 4px;
+  margin-top: 6px;
+  line-height: 1.45;
 }
 </style>

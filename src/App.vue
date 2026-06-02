@@ -7,8 +7,9 @@ import VocabPanel from '@/components/VocabPanel.vue'
 import QuestionCard from '@/components/QuestionCard.vue'
 import PublishPanel from '@/components/PublishPanel.vue'
 import ImageGallery from '@/components/ImageGallery.vue'
-import FormSelect from '@/components/FormSelect.vue'
-import type { SelectGroup, SelectOption } from '@/components/FormSelect.vue'
+import ModeTabs from '@/components/ModeTabs.vue'
+import { ElMessage } from 'element-plus'
+import type { SelectGroup, SelectOption } from '@/types/form'
 import type {
   AiProviderId,
   AiProviderOption,
@@ -68,7 +69,6 @@ const activeAiProvider = ref('')
 const activeExpertTag = ref('')
 const experts = ref<ExamExpert[]>([])
 const selectedExpertId = ref('none')
-const toast = ref('')
 const xhsImages = ref<GeneratedImage[]>([])
 const douyinImages = ref<GeneratedImage[]>([])
 const xhsZipName = ref('考公小红书配图.zip')
@@ -101,8 +101,7 @@ const vocabWebLookup = ref<VocabWebLookupResult | null>(null)
 const vocabWebLoading = ref(false)
 
 function showToast(msg: string, duration = 3000) {
-  toast.value = msg
-  setTimeout(() => (toast.value = ''), duration)
+  ElMessage({ message: msg, duration, showClose: true })
 }
 
 function setLoading(msg: string, sub = '') {
@@ -530,7 +529,7 @@ async function handleCopyDouyin() {
 </script>
 
 <template>
-  <div class="app">
+  <el-container class="app">
     <LoadingOverlay
       :visible="loading"
       :message="loadingMessage"
@@ -539,32 +538,35 @@ async function handleCopyDouyin() {
       @cancel="handleCancelGenerate"
     />
 
-    <header class="header">
-      <div class="brand">
-        <span class="logo">公</span>
-        <div>
-          <h1>考公助手</h1>
-          <p>自动生成题目 · 一键发布小红书 / 抖音</p>
+    <el-header class="header" height="auto">
+      <div class="header-inner">
+        <div class="brand">
+          <el-avatar class="logo" :size="48" shape="square">公</el-avatar>
+          <div>
+            <h1>考公助手</h1>
+            <el-text type="info">自动生成题目 · 一键发布小红书 / 抖音</el-text>
+          </div>
         </div>
+        <el-tag
+          class="ai-badge"
+          :type="aiConfigured ? 'danger' : 'info'"
+          effect="plain"
+          round
+        >
+          {{ aiConfigured ? `AI 已配置 · ${configuredProviderHint}` : '请配置 AI Key' }}
+        </el-tag>
       </div>
-      <span class="badge" :class="{ ai: aiConfigured }">
-        {{ aiConfigured ? `AI 已配置 · ${configuredProviderHint}` : '请配置 AI Key' }}
-      </span>
-    </header>
+    </el-header>
 
-    <main class="main">
-      <div class="mode-tabs">
-        <button :class="{ active: appMode === 'exam' }" @click="appMode = 'exam'">
-          📝 模块刷题
-        </button>
-        <button :class="{ active: appMode === 'vocab' }" @click="appMode = 'vocab'">
-          📖 700 高频词
-        </button>
-      </div>
-
+    <el-main class="main">
+      <div class="page-shell">
+        <ModeTabs v-model="appMode" />
+        <div class="page-shell-body">
       <template v-if="appMode === 'exam'">
-        <section class="panel">
-          <h2>选择考公模块</h2>
+        <el-card class="panel panel-in-shell" shadow="never">
+          <template #header>
+            <span class="panel-title">选择考公模块</span>
+          </template>
           <ModuleSelector
             :modules="examModules"
             :selected-id="selectedModuleId"
@@ -576,57 +578,111 @@ async function handleCopyDouyin() {
             :selected-id="selectedTopicId"
             @select="selectedTopicId = $event"
           />
-          <div class="controls">
+
+          <el-form label-position="top" class="controls" @submit.prevent="handleGenerate">
             <div class="controls-basic">
-              <label class="control-field">
-                <span class="control-label">题目数量</span>
-                <FormSelect v-model="count" :options="countOptions" :disabled="loading" />
-              </label>
-              <label class="control-field">
-                <span class="control-label">难度</span>
-                <FormSelect v-model="difficulty" :options="difficultyOptions" :disabled="loading" />
-              </label>
+              <el-form-item label="题目数量" class="control-item">
+                <el-select v-model="count" size="large" :disabled="loading" class="control-select">
+                    <el-option
+                      v-for="opt in countOptions"
+                      :key="opt.value"
+                      :label="opt.label"
+                      :value="opt.value"
+                    />
+                  </el-select>
+              </el-form-item>
+              <el-form-item label="难度" class="control-item">
+                <el-select v-model="difficulty" size="large" :disabled="loading" class="control-select">
+                    <el-option
+                      v-for="opt in difficultyOptions"
+                      :key="opt.value"
+                      :label="opt.label"
+                      :value="opt.value"
+                    />
+                  </el-select>
+              </el-form-item>
             </div>
 
-            <div v-if="showAiOptions" class="controls-ai">
-              <span class="controls-ai-title">AI 设置</span>
+            <el-card v-if="showAiOptions" shadow="never" class="controls-ai panel-nested">
+              <template #header>
+                <span class="controls-ai-title">AI 设置</span>
+              </template>
               <div class="controls-ai-grid">
-                <label class="control-field">
-                  <span class="control-label">AI 提供商</span>
-                  <FormSelect
+                <el-form-item label="AI 提供商" class="control-item">
+                  <el-select
                     v-model="selectedAiProvider"
-                    :options="aiProviderOptions"
+                    size="large"
                     :disabled="loading"
-                  />
-                </label>
-                <label class="control-field control-field--wide">
-                  <span class="control-label">AI 模型</span>
-                  <FormSelect
+                    class="control-select"
+                  >
+                      <el-option
+                        v-for="opt in aiProviderOptions"
+                        :key="opt.value"
+                        :label="opt.label"
+                        :value="opt.value"
+                        :disabled="opt.disabled"
+                      />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="AI 模型" class="control-item">
+                  <el-select
                     v-model="aiModel"
-                    :options="aiModelOptions"
+                    size="large"
                     :disabled="loading || !currentProvider?.configured"
-                  />
-                </label>
-                <label class="control-field control-field--full">
-                  <span class="control-label">解析风格</span>
-                  <FormSelect
+                    class="control-select"
+                  >
+                      <el-option
+                        v-for="opt in aiModelOptions"
+                        :key="opt.value"
+                        :label="opt.label"
+                        :value="opt.value"
+                      />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="解析风格" class="control-item control-item--full">
+                  <el-select
                     v-model="selectedExpertId"
-                    :groups="expertSelectGroups"
+                    size="large"
                     :disabled="loading"
-                  />
-                </label>
+                    class="control-select"
+                  >
+                      <el-option-group
+                        v-for="group in expertSelectGroups"
+                        :key="group.label"
+                        :label="group.label"
+                      >
+                        <el-option
+                          v-for="opt in group.options"
+                          :key="opt.value"
+                          :label="opt.label"
+                          :value="opt.value"
+                        />
+                      </el-option-group>
+                    </el-select>
+                </el-form-item>
               </div>
-            </div>
+            </el-card>
 
-            <p v-if="!aiConfigured" class="ai-hint">
-              请在 server/.env 中配置 DEEPSEEK_API_KEY 等后再生成题目
-            </p>
-            <button class="generate-btn" :disabled="loading || !aiConfigured" @click="handleGenerate">
-              <span v-if="loading" class="btn-spinner" />
-              {{ loading ? '生成中…' : '✨ AI 按考点生成题目' }}
-            </button>
-          </div>
-        </section>
+            <el-alert
+              v-if="!aiConfigured"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="请在 server/.env 中配置 DEEPSEEK_API_KEY 等后再生成题目"
+              class="ai-hint"
+            />
+            <el-button
+              type="primary"
+              size="large"
+              :disabled="loading || !aiConfigured"
+              :loading="loading"
+              class="generate-btn"
+              @click="handleGenerate"
+            >
+              ✨ AI 按考点生成题目
+            </el-button>
+          </el-form>
+        </el-card>
       </template>
 
       <template v-else>
@@ -648,35 +704,42 @@ async function handleCopyDouyin() {
           @generate="handleVocabGenerate"
         />
       </template>
+        </div>
+      </div>
 
       <template v-if="questions.length">
-        <div class="content-grid">
-          <section class="questions">
-            <div class="section-head">
-              <h2>题目列表</h2>
-              <span v-if="sourceLabel" class="source-tag">{{ sourceLabel }}</span>
+        <el-row :gutter="24" class="content-grid">
+          <el-col :xs="24" :lg="16">
+            <div class="questions">
+              <div class="section-head">
+                <h2>题目列表</h2>
+                <el-tag v-if="sourceLabel" type="danger" effect="plain" round>
+                  {{ sourceLabel }}
+                </el-tag>
+              </div>
+              <QuestionCard
+                v-for="(q, i) in questions"
+                :key="q.id"
+                :question="q"
+                :index="i"
+              />
             </div>
-            <QuestionCard
-              v-for="(q, i) in questions"
-              :key="q.id"
-              :question="q"
-              :index="i"
+          </el-col>
+          <el-col :xs="24" :lg="8">
+            <PublishPanel
+              :post="post"
+              :publishing="publishing"
+              :xhs-image-count="xhsImages.length"
+              :douyin-image-count="douyinImages.length"
+              @copy-xhs="handleCopyXhs"
+              @copy-douyin="handleCopyDouyin"
+              @download-xhs="handleDownloadPlatform('xhs')"
+              @download-douyin="handleDownloadPlatform('douyin')"
+              @publish-xhs="handlePublishPlatform('xhs')"
+              @publish-douyin="handlePublishPlatform('douyin')"
             />
-          </section>
-
-          <PublishPanel
-            :post="post"
-            :publishing="publishing"
-            :xhs-image-count="xhsImages.length"
-            :douyin-image-count="douyinImages.length"
-            @copy-xhs="handleCopyXhs"
-            @copy-douyin="handleCopyDouyin"
-            @download-xhs="handleDownloadPlatform('xhs')"
-            @download-douyin="handleDownloadPlatform('douyin')"
-            @publish-xhs="handlePublishPlatform('xhs')"
-            @publish-douyin="handlePublishPlatform('douyin')"
-          />
-        </div>
+          </el-col>
+        </el-row>
 
         <ImageGallery
           v-if="post && questions.length"
@@ -692,31 +755,37 @@ async function handleCopyDouyin() {
         />
       </template>
 
-      <div v-else-if="!loading" class="empty">
-        <p v-if="appMode === 'exam'">👆 选择模块和考点后点击「按考点生成题目」</p>
-        <p v-else>👆 浏览词汇库，或点击「生成词汇题」开始</p>
-        <p class="sub">全部模块 AI 出题 · 700 高频词 · 小红书 / 抖音双平台发布</p>
-      </div>
-    </main>
-
-    <Transition name="fade">
-      <div v-if="toast" class="toast">{{ toast }}</div>
-    </Transition>
-  </div>
+      <el-empty
+        v-else-if="!loading"
+        :description="appMode === 'exam' ? '选择模块和考点后点击「AI 按考点生成题目」' : '浏览词汇库，或点击「生成词汇题」开始'"
+        class="empty"
+      >
+        <template #image>
+          <span class="empty-emoji">{{ appMode === 'exam' ? '👆' : '📖' }}</span>
+        </template>
+        <el-text type="info" size="small">
+          全部模块 AI 出题 · 700 高频词 · 小红书 / 抖音双平台发布
+        </el-text>
+      </el-empty>
+    </el-main>
+  </el-container>
 </template>
 
 <style scoped>
 .app {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px 20px 60px;
+  min-height: 100vh;
+  flex-direction: column;
 }
 
 .header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 32px;
+  padding: 20px 16px 0;
+  height: auto !important;
+}
+
+.main {
+  padding: 16px 16px 48px;
 }
 
 .brand {
@@ -726,101 +795,104 @@ async function handleCopyDouyin() {
 }
 
 .logo {
-  width: 48px;
-  height: 48px;
-  background: var(--primary);
+  background: var(--el-color-primary) !important;
   color: #fff;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
+  flex-shrink: 0;
 }
 
 h1 {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
+  line-height: 1.3;
 }
 
-.brand p {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.badge {
-  font-size: 13px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  background: #f0f0f0;
-  color: var(--text-secondary);
-}
-
-.badge.ai {
-  background: var(--primary-light);
-  color: var(--primary);
-}
-
-.mode-tabs {
+.header-inner {
   display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  width: 100%;
 }
 
-.mode-tabs button {
-  padding: 10px 20px;
-  border-radius: 8px;
-  background: var(--card);
-  border: 2px solid var(--border);
-  font-size: 15px;
-  font-weight: 600;
+.ai-badge {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
-.mode-tabs button.active {
-  border-color: var(--primary);
-  background: var(--primary-light);
-  color: var(--primary);
+@media (max-width: 576px) {
+  .header-inner {
+    flex-wrap: wrap;
+  }
+
+  .ai-badge {
+    margin-left: auto;
+  }
+}
+
+.page-shell {
+  width: 100%;
+  margin-bottom: 24px;
+  background: #fff;
+  border: 1px solid var(--ui-border, #e8e8ec);
+  border-radius: var(--ui-radius, 12px);
+  box-shadow: var(--ui-shadow);
+  overflow: hidden;
+}
+
+.page-shell-body :deep(.panel-in-shell),
+.page-shell-body :deep(.vocab-panel) {
+  margin-bottom: 0;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 .panel {
-  background: var(--card);
-  border-radius: var(--radius);
-  padding: 24px;
-  box-shadow: var(--shadow);
   margin-bottom: 24px;
+  border: none;
+  box-shadow: var(--shadow);
 }
 
-.panel h2 {
+.panel-title {
   font-size: 18px;
-  margin-bottom: 16px;
+  font-weight: 700;
 }
 
 .controls {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 20px;
+  margin-top: 16px;
 }
 
 .controls-basic {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 16px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 576px) {
+  .controls-basic {
+    grid-template-columns: 1fr;
+  }
+}
+
+.control-item {
+  margin-bottom: 0;
+}
+
+.control-select {
+  width: 100%;
 }
 
 .controls-ai {
-  padding: 14px 16px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  margin-bottom: 16px;
 }
 
 .controls-ai-title {
-  display: block;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 12px;
 }
 
 .controls-ai-grid {
@@ -829,90 +901,37 @@ h1 {
   gap: 12px 16px;
 }
 
-.control-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.control-field--wide {
-  grid-column: span 1;
-}
-
-.control-field--full {
+.control-item--full {
   grid-column: 1 / -1;
 }
 
-.control-label {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.ai-hint {
-  margin: 0 0 12px;
-  font-size: 13px;
-  color: #b45309;
-}
-
-.generate-btn {
-  align-self: flex-start;
-  padding: 10px 28px;
-  background: var(--primary);
-  color: #fff;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 @media (max-width: 720px) {
-  .controls-basic,
   .controls-ai-grid {
     grid-template-columns: 1fr;
   }
 
-  .control-field--wide,
-  .control-field--full {
+  .control-item--full {
     grid-column: auto;
   }
+}
 
+.ai-hint {
+  margin-bottom: 16px;
+}
+
+.generate-btn {
+  width: 100%;
+}
+
+@media (min-width: 576px) {
   .generate-btn {
-    width: 100%;
-    justify-content: center;
+    width: auto;
+    min-width: 200px;
   }
-}
-
-.generate-btn:hover:not(:disabled) {
-  background: #e01e3c;
-}
-
-.generate-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.btn-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .content-grid {
-  display: grid;
-  grid-template-columns: 1fr 360px;
-  gap: 24px;
-  align-items: start;
+  margin-bottom: 0;
 }
 
 .questions {
@@ -923,63 +942,21 @@ h1 {
 
 .section-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+  margin-bottom: 4px;
 }
 
 .section-head h2 {
   font-size: 18px;
 }
 
-.source-tag {
-  font-size: 12px;
-  padding: 2px 10px;
-  background: var(--primary-light);
-  color: var(--primary);
-  border-radius: 20px;
-}
-
 .empty {
-  text-align: center;
-  padding: 80px 20px;
-  color: var(--text-secondary);
+  padding: 48px 20px;
 }
 
-.empty p {
-  font-size: 18px;
-  margin-bottom: 8px;
-}
-
-.empty .sub {
-  font-size: 14px;
-}
-
-.toast {
-  position: fixed;
-  bottom: 32px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.8);
-  color: #fff;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 14px;
-  z-index: 3000;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-@media (max-width: 900px) {
-  .content-grid {
-    grid-template-columns: 1fr;
-  }
+.empty-emoji {
+  font-size: 48px;
 }
 </style>

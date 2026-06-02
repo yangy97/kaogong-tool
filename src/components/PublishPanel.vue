@@ -19,75 +19,100 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <aside v-if="post" class="publish-panel">
-    <h3>📤 一键发布</h3>
+  <el-card v-if="post" class="publish-panel" shadow="never">
+    <template #header>
+      <span class="panel-title">📤 一键发布</span>
+    </template>
 
-    <div class="preview-box">
-      <div class="title">{{ post.title }}</div>
-      <pre class="body">{{ post.body.slice(0, 300) }}{{ post.body.length > 300 ? '…' : '' }}</pre>
-      <div class="tags">
-        <span v-for="tag in post.tags.slice(0, 6)" :key="tag" class="tag">#{{ tag }}</span>
+    <el-scrollbar max-height="200" class="preview-scroll">
+      <div class="preview-box">
+        <div class="title">{{ post.title }}</div>
+        <pre class="body">{{ post.body.slice(0, 300) }}{{ post.body.length > 300 ? '…' : '' }}</pre>
+        <div class="tags">
+          <el-tag
+            v-for="tag in post.tags.slice(0, 6)"
+            :key="tag"
+            type="danger"
+            effect="plain"
+            size="small"
+          >
+            #{{ tag }}
+          </el-tag>
+        </div>
       </div>
-    </div>
+    </el-scrollbar>
 
-    <div class="platform-block xhs">
+    <el-card shadow="never" class="platform-block xhs-block">
       <div class="platform-head">
         <span class="platform-icon">📕</span>
         <div>
           <strong>小红书</strong>
-          <p>3:4 竖图 · 暖色风格</p>
+          <el-text type="info" size="small" tag="p">3:4 竖图 · 暖色风格</el-text>
         </div>
       </div>
-      <div class="actions">
-        <button class="btn secondary" @click="emit('copyXhs')">复制文案</button>
-        <button class="btn secondary" :disabled="publishing" @click="emit('downloadXhs')">
-          下载 ZIP
-        </button>
-        <button class="btn primary xhs-btn" :disabled="publishing" @click="emit('publishXhs')">
+      <el-space direction="vertical" fill class="actions">
+        <el-button @click="emit('copyXhs')">复制文案</el-button>
+        <el-button :disabled="publishing" @click="emit('downloadXhs')">下载 ZIP</el-button>
+        <el-button type="primary" :disabled="publishing" @click="emit('publishXhs')">
           {{ publishing ? '准备中…' : '一键发布小红书' }}
-        </button>
-      </div>
-      <p v-if="xhsImageCount" class="ready">✅ 已生成 {{ xhsImageCount }} 张小红书配图</p>
-    </div>
+        </el-button>
+      </el-space>
+      <el-text v-if="xhsImageCount" type="success" size="small" class="ready">
+        ✅ 已生成 {{ xhsImageCount }} 张小红书配图
+      </el-text>
+    </el-card>
 
-    <div class="platform-block douyin">
+    <el-card shadow="never" class="platform-block douyin-block">
       <div class="platform-head">
         <span class="platform-icon">🎵</span>
         <div>
           <strong>抖音</strong>
-          <p>9:16 竖图 · 中心安全区 · 深色高对比</p>
+          <el-text type="info" size="small" tag="p">9:16 竖图 · 中心安全区 · 深色高对比</el-text>
         </div>
       </div>
-      <div class="actions">
-        <button class="btn secondary" @click="emit('copyDouyin')">复制文案</button>
-        <button class="btn secondary" :disabled="publishing" @click="emit('downloadDouyin')">
-          下载 ZIP
-        </button>
-        <button class="btn primary douyin-btn" :disabled="publishing" @click="emit('publishDouyin')">
+      <el-space direction="vertical" fill class="actions">
+        <el-button @click="emit('copyDouyin')">复制文案</el-button>
+        <el-button :disabled="publishing" @click="emit('downloadDouyin')">下载 ZIP</el-button>
+        <el-button class="douyin-btn" :disabled="publishing" @click="emit('publishDouyin')">
           {{ publishing ? '准备中…' : '一键发布抖音' }}
-        </button>
-      </div>
-      <p v-if="douyinImageCount" class="ready">✅ 已生成 {{ douyinImageCount }} 张抖音配图</p>
-    </div>
+        </el-button>
+      </el-space>
+      <el-text v-if="douyinImageCount" type="success" size="small" class="ready">
+        ✅ 已生成 {{ douyinImageCount }} 张抖音配图
+      </el-text>
+    </el-card>
 
-    <p class="tip">
-      发布流程：复制文案 → 下载对应平台 ZIP → 打开创作中心上传图片并粘贴文案。
-    </p>
-  </aside>
+    <el-alert
+      type="info"
+      :closable="false"
+      show-icon
+      title="发布流程：复制文案 → 下载对应平台 ZIP → 打开创作中心上传图片并粘贴文案。"
+      class="tip-alert"
+    />
+  </el-card>
 </template>
 
 <style scoped>
 .publish-panel {
-  background: var(--card);
-  border-radius: var(--radius);
-  padding: 24px;
+  border: none;
   box-shadow: var(--shadow);
   position: sticky;
-  top: 24px;
+  top: 16px;
 }
 
-h3 {
+@media (max-width: 900px) {
+  .publish-panel {
+    position: static;
+    top: auto;
+  }
+}
+
+.panel-title {
   font-size: 18px;
+  font-weight: 700;
+}
+
+.preview-scroll {
   margin-bottom: 16px;
 }
 
@@ -95,22 +120,19 @@ h3 {
   background: var(--bg);
   border-radius: 8px;
   padding: 16px;
-  margin-bottom: 16px;
-  max-height: 200px;
-  overflow-y: auto;
 }
 
 .title {
   font-size: 15px;
   font-weight: 700;
   margin-bottom: 8px;
-  color: var(--primary);
+  color: var(--el-color-primary);
 }
 
 .body {
   font-size: 12px;
   white-space: pre-wrap;
-  color: var(--text-secondary);
+  color: var(--el-text-color-secondary);
   font-family: inherit;
   line-height: 1.5;
 }
@@ -118,28 +140,21 @@ h3 {
 .tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   margin-top: 8px;
 }
 
-.tag {
-  font-size: 11px;
-  color: var(--primary);
-  background: var(--primary-light);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
 .platform-block {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px;
   margin-bottom: 12px;
 }
 
-.platform-block.douyin {
-  border-color: #333;
+.xhs-block {
+  background: var(--el-fill-color-blank);
+}
+
+.douyin-block {
   background: linear-gradient(135deg, #fafafa 0%, #f0f0f5 100%);
+  border: 1px solid #ddd;
 }
 
 .platform-head {
@@ -155,80 +170,43 @@ h3 {
 
 .platform-head strong {
   font-size: 15px;
-}
-
-.platform-head p {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 2px;
+  display: block;
 }
 
 .actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  width: 100%;
 }
 
-.btn {
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
+.actions :deep(.el-space__item) {
+  width: 100%;
 }
 
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.actions .el-button {
+  width: 100%;
 }
 
-.btn.primary {
+.douyin-btn {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid #00f2ea;
   color: #fff;
 }
 
-.btn.xhs-btn {
-  background: var(--primary);
-}
-
-.btn.xhs-btn:hover:not(:disabled) {
-  background: #e01e3c;
-}
-
-.btn.douyin-btn {
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
-  border: 1px solid #00f2ea;
-}
-
-.btn.douyin-btn:hover:not(:disabled) {
+.douyin-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #252540, #1e2a4a);
-}
-
-.btn.secondary {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-
-.platform-block.douyin .btn.secondary {
-  background: #fff;
-  color: #1a1a2e;
-  border: 1px solid #c5c5d0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.platform-block.douyin .btn.secondary:hover:not(:disabled) {
-  background: #f0f0f5;
-  border-color: #888;
+  color: #fff;
 }
 
 .ready {
-  font-size: 12px;
-  color: #2e7d32;
+  display: block;
   margin-top: 8px;
 }
 
-.tip {
+.tip-alert {
+  margin-top: 4px;
+}
+
+.tip-alert :deep(.el-alert__title) {
   font-size: 12px;
-  color: var(--text-secondary);
   line-height: 1.5;
 }
 </style>

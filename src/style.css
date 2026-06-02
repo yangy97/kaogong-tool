@@ -16,24 +16,39 @@
   --card: #fff;
   --radius: 12px;
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+
+  /* Element Plus 主题（小红书红） */
+  --el-color-primary: #ff2442;
+  --el-color-primary-light-3: #ff5c72;
+  --el-color-primary-light-5: #ff8a9a;
+  --el-color-primary-light-7: #ffb8c2;
+  --el-color-primary-light-8: #ffd0d6;
+  --el-color-primary-light-9: #fff0f2;
+  --el-color-primary-dark-2: #e01e3c;
+  --el-border-radius-base: 8px;
+  --el-font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 body {
-  font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: var(--el-font-family);
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
 }
 
-button {
-  font-family: inherit;
-  cursor: pointer;
-  border: none;
-  outline: none;
+#app {
+  min-height: 100vh;
 }
 
-input,
-select {
-  font-family: inherit;
+/* 移动端：表单项、按钮更易点 */
+@media (max-width: 768px) {
+  .el-button {
+    min-height: 36px;
+  }
+
+  .el-select {
+    width: 100%;
+  }
 }

@@ -1,0 +1,180 @@
+/* Element Plus 全局视觉：更大圆角、柔和边框、统一高度 */
+
+:root {
+  --el-border-radius-base: 10px;
+  --el-border-radius-small: 8px;
+  --el-border-radius-round: 20px;
+  --ui-radius: 12px;
+  --ui-radius-pill: 20px;
+  --ui-control-h: 42px;
+  --ui-border: #e8e8ec;
+  --ui-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --ui-shadow-hover: 0 4px 16px rgba(255, 36, 66, 0.12);
+}
+
+/* 卡片：灰边 + 圆角，避免刺眼红框 */
+.el-card {
+  border-radius: var(--ui-radius) !important;
+  border: 1px solid var(--ui-border) !important;
+  box-shadow: var(--ui-shadow) !important;
+}
+
+.el-card__header {
+  border-bottom: 1px solid var(--ui-border) !important;
+  padding: 16px 20px !important;
+}
+
+.el-card__body {
+  padding: 20px !important;
+}
+
+/* 输入框 / 下拉：与旧版 FormSelect 接近 */
+.el-input__wrapper,
+.el-select__wrapper {
+  min-height: var(--ui-control-h);
+  border-radius: 10px !important;
+  box-shadow: 0 0 0 1px var(--ui-border) inset !important;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.el-input__wrapper:hover,
+.el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px #ddd inset !important;
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset,
+    0 0 0 3px var(--el-color-primary-light-9) !important;
+}
+
+.el-form-item__label {
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding-bottom: 6px !important;
+}
+
+.el-button {
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.el-button--large {
+  min-height: var(--ui-control-h);
+  padding: 10px 22px;
+  border-radius: 10px;
+}
+
+/* 主面板内嵌 AI 设置区：浅底圆角 */
+.panel-nested {
+  background: var(--bg) !important;
+  border: 1px solid var(--ui-border) !important;
+  box-shadow: none !important;
+}
+
+.panel-nested .el-card__header {
+  padding: 12px 16px !important;
+  min-height: auto;
+}
+
+.panel-nested .el-card__body {
+  padding: 16px !important;
+}
+
+.el-alert {
+  border-radius: 10px !important;
+}
+
+/* Tab 栏：与下方内容同宽、同色白底 */
+.tabs-bar-wrap {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 16px 0;
+  background: #fff;
+  border-bottom: 1px solid var(--ui-border, #e8e8ec);
+}
+
+/* 配图预览等独立卡片内的 Tab 条 */
+.el-card .tabs-bar-wrap {
+  margin: 0 0 16px;
+  padding: 4px 12px 0;
+  background: #fff;
+  border: none;
+  border-bottom: 1px solid var(--ui-border, #e8e8ec);
+  border-radius: 8px;
+}
+
+/* 与配图预览一致的应用级 Tab（模块刷题 / 700词 / 小红书·抖音） */
+.app-tabs {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.tabs-bar-wrap .app-tabs .el-tabs__nav-wrap::after {
+  background-color: transparent;
+}
+
+.app-tabs .el-tabs__header {
+  margin-bottom: 0;
+  width: 100%;
+}
+
+.app-tabs .el-tabs__nav-wrap::after {
+  height: 1px;
+  background-color: var(--ui-border, #e8e8ec);
+}
+
+.app-tabs .el-tabs__nav-wrap {
+  flex: none;
+}
+
+.app-tabs .el-tabs__nav-scroll {
+  overflow: visible;
+}
+
+.app-tabs .el-tabs__nav {
+  display: inline-flex;
+  width: auto;
+  float: none;
+}
+
+.app-tabs .el-tabs__item {
+  flex: none;
+  height: auto;
+  min-height: 48px;
+  padding: 8px 20px 12px;
+  line-height: 1.3;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.app-tabs .el-tabs__item .tab-label {
+  display: block;
+}
+
+.app-tabs .el-tabs__item .tab-desc {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+}
+
+.app-tabs .el-tabs__active-bar {
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+
+.app-tabs .el-tabs__content {
+  display: none;
+}
+
+@media (max-width: 400px) {
+  .app-tabs .el-tabs__item .tab-desc {
+    display: none;
+  }
+
+  .app-tabs .el-tabs__item {
+    min-height: 44px;
+    padding: 10px 8px 12px;
+  }
+}

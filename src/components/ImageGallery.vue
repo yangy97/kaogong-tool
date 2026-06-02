@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { GeneratedImage, ImagePlatform } from '@/utils/xhsCard'
 import { getPlatformLabel } from '@/utils/xhsCard'
 
@@ -25,6 +25,22 @@ const tabs: { id: ImagePlatform; label: string; desc: string }[] = [
   { id: 'douyin', label: '抖音风格', desc: '9:16 深色' },
 ]
 
+const activeImages = computed(() =>
+  activeTab.value === 'xhs' ? props.xhsImages : props.douyinImages,
+)
+
+const previewUrls = computed(() => activeImages.value.map((img) => img.url))
+
+const zipName = computed(() =>
+  activeTab.value === 'xhs' ? props.xhsZipName : props.douyinZipName,
+)
+
+const pathHint = computed(() =>
+  activeTab.value === 'xhs'
+    ? '解压后在创作中心「上传图文」使用'
+    : '在抖音创作中心「发布图文」上传',
+)
+
 function selectTab(id: ImagePlatform) {
   activeTab.value = id
   const hasImages = id === 'xhs' ? props.xhsImages.length : props.douyinImages.length
@@ -44,200 +60,169 @@ watch(
 </script>
 
 <template>
-  <section v-if="xhsImages.length || douyinImages.length || imageLoading" class="gallery">
-    <div class="gallery-head">
-      <h3>🖼️ 配图预览</h3>
-    </div>
+  <el-card
+    v-if="xhsImages.length || douyinImages.length || imageLoading"
+    class="gallery"
+    shadow="never"
+  >
+    <template #header>
+      <div class="gallery-head">
+        <span>🖼️ 配图预览</span>
+        <el-text v-if="activeImages.length" type="info" size="small">
+          点击缩略图可放大查看
+        </el-text>
+      </div>
+    </template>
 
-    <div class="tabs">
-      <button
-        v-for="tab in tabs"
-        :key="tab.id"
-        class="tab"
-        :class="{ active: activeTab === tab.id }"
-        @click="selectTab(tab.id)"
+    <div class="tabs-bar-wrap">
+      <el-tabs
+        v-model="activeTab"
+        class="app-tabs"
+        @tab-change="(name: ImagePlatform) => selectTab(name)"
       >
-        {{ tab.label }}
-        <span class="tab-desc">{{ tab.desc }}</span>
-      </button>
+        <el-tab-pane v-for="tab in tabs" :key="tab.id" :name="tab.id">
+          <template #label>
+            <span class="tab-label">{{ tab.label }}</span>
+            <el-text type="info" size="small" class="tab-desc">{{ tab.desc }}</el-text>
+          </template>
+        </el-tab-pane>
+      </el-tabs>
     </div>
 
-    <p v-if="imageLoading && loadingPlatform === activeTab" class="loading-tab">
-      正在生成{{ getPlatformLabel(activeTab) }}配图…
-    </p>
+    <div v-if="imageLoading && loadingPlatform === activeTab" class="loading-tab">
+      <el-skeleton :rows="2" animated />
+      <el-text type="info">正在生成{{ getPlatformLabel(activeTab) }}配图…</el-text>
+    </div>
 
-    <template v-else-if="activeTab === 'xhs' && xhsImages.length">
+    <template v-else-if="activeImages.length">
       <div class="tab-actions">
-        <span>{{ xhsImages.length }} 张</span>
-        <button class="zip-btn" @click="emit('downloadZip', 'xhs')">下载小红书 ZIP</button>
+        <el-text type="info">{{ activeImages.length }} 张</el-text>
+        <el-button
+          type="primary"
+          :class="{ 'douyin-zip': activeTab === 'douyin' }"
+          @click="emit('downloadZip', activeTab)"
+        >
+          下载{{ getPlatformLabel(activeTab) }} ZIP
+        </el-button>
       </div>
-      <p class="path-hint">文件名：<code>{{ xhsZipName }}</code> → 解压后在创作中心「上传图文」使用</p>
-      <div class="grid xhs-grid">
-        <figure v-for="img in xhsImages" :key="img.filename" class="thumb">
-          <img :src="img.url" :alt="img.label" />
-          <figcaption>
-            <span>{{ img.label }}</span>
-            <button @click="emit('downloadOne', img)">下载</button>
-          </figcaption>
-        </figure>
-      </div>
-    </template>
+      <el-text type="info" size="small" class="path-hint">
+        文件名：<el-text tag="code">{{ zipName }}</el-text> → {{ pathHint }}
+      </el-text>
 
-    <template v-else-if="activeTab === 'douyin' && douyinImages.length">
-      <div class="tab-actions">
-        <span>{{ douyinImages.length }} 张</span>
-        <button class="zip-btn douyin" @click="emit('downloadZip', 'douyin')">下载抖音 ZIP</button>
-      </div>
-      <p class="path-hint">文件名：<code>{{ douyinZipName }}</code> → 在抖音创作中心「发布图文」上传</p>
-      <div class="grid douyin-grid">
-        <figure v-for="img in douyinImages" :key="img.filename" class="thumb">
-          <img :src="img.url" :alt="img.label" />
-          <figcaption>
-            <span>{{ img.label }}</span>
-            <button @click="emit('downloadOne', img)">下载</button>
-          </figcaption>
-        </figure>
-      </div>
+      <el-row :gutter="12" class="image-grid">
+        <el-col
+          v-for="(img, index) in activeImages"
+          :key="img.filename"
+          :xs="12"
+          :sm="8"
+          :md="6"
+          :lg="4"
+        >
+          <el-card shadow="hover" class="thumb-card" :body-style="{ padding: '0' }">
+            <el-image
+              :src="img.url"
+              :alt="img.label"
+              fit="cover"
+              class="thumb-image"
+              :class="activeTab === 'xhs' ? 'ratio-xhs' : 'ratio-douyin'"
+              :preview-src-list="previewUrls"
+              :initial-index="index"
+              preview-teleported
+              hide-on-click-modal
+            />
+            <div class="thumb-footer">
+              <el-text size="small" truncated>{{ img.label }}</el-text>
+              <el-button
+                type="primary"
+                link
+                size="small"
+                @click.stop="emit('downloadOne', img)"
+              >
+                下载
+              </el-button>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
     </template>
-  </section>
+  </el-card>
 </template>
 
 <style scoped>
 .gallery {
-  background: var(--card);
-  border-radius: var(--radius);
-  padding: 24px;
-  box-shadow: var(--shadow);
   margin-top: 24px;
+  border: none;
+  box-shadow: var(--shadow);
 }
 
-.gallery-head h3 {
-  font-size: 18px;
-  margin-bottom: 16px;
-}
-
-.tabs {
+.gallery-head {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.tab {
-  flex: 1;
-  padding: 12px;
-  border: 2px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg);
-  text-align: left;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.tab.active {
-  border-color: var(--primary);
-  background: var(--primary-light);
-  color: var(--primary);
-}
-
-.tab-desc {
-  display: block;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-secondary);
-  margin-top: 4px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .tab-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 8px;
-  font-size: 14px;
-  color: var(--text-secondary);
+  flex-wrap: wrap;
 }
 
-.zip-btn {
-  padding: 8px 16px;
-  background: var(--primary);
-  color: #fff;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.zip-btn.douyin {
+.douyin-zip {
   background: linear-gradient(135deg, #1a1a2e, #16213e);
   border: 1px solid #00f2ea;
 }
 
+.douyin-zip:hover {
+  background: linear-gradient(135deg, #252540, #1e2a4a);
+}
+
 .path-hint {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 12px;
+  display: block;
+  margin-bottom: 16px;
 }
 
 .path-hint code {
-  background: rgba(0, 0, 0, 0.06);
-  padding: 1px 6px;
-  border-radius: 4px;
+  font-family: inherit;
 }
 
-.grid {
-  display: grid;
-  gap: 12px;
+.image-grid {
+  margin-top: 4px;
+}
+
+.thumb-card {
   margin-bottom: 12px;
 }
 
-.xhs-grid {
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-}
-
-.douyin-grid {
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-}
-
-.thumb {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg);
-}
-
-.thumb img {
+.thumb-image {
   width: 100%;
   display: block;
-  object-fit: cover;
+  cursor: zoom-in;
 }
 
-.xhs-grid .thumb img {
-  aspect-ratio: 3/4;
+.thumb-image.ratio-xhs {
+  aspect-ratio: 3 / 4;
 }
 
-.douyin-grid .thumb img {
-  aspect-ratio: 9/16;
+.thumb-image.ratio-douyin {
+  aspect-ratio: 9 / 16;
 }
 
-.thumb figcaption {
-  padding: 6px;
+.thumb-footer {
+  padding: 8px;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-}
-
-.thumb figcaption button {
-  padding: 3px 6px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 10px;
-  color: var(--primary);
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .loading-tab {
   text-align: center;
-  padding: 48px 20px;
-  color: var(--text-secondary);
-  font-size: 14px;
+  padding: 32px 20px;
 }
 </style>
