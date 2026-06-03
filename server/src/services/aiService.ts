@@ -9,7 +9,7 @@ import { normalizeStemTables } from '../utils/stemFormat'
 import { compactAnalysis } from '../utils/analysisNormalize'
 import { normalizeTuxingFromAi } from '../utils/tuxingNormalize'
 import { isGridTuxing, syncTuxingAnalysis } from '../utils/tuxingAnalysisSync'
-import { diversifyChoiceAnswers } from '../utils/answerDiversify'
+import { diversifyChoiceAnswersWithReport } from '../utils/answerDiversify'
 import { isTuxingTopicId } from '../types/tuxing'
 import { devGroup, devLog, preview } from '../utils/devLog'
 
@@ -236,7 +236,23 @@ export async function generateViaAi(
   })
 
   const rawParsed = parseAiResponse(content, expert?.analysisPrefix, isTuxingTopicId(topic?.id))
-  const raw = diversifyChoiceAnswers(rawParsed).map((q) => {
+  const { questions: diversified, report: diversifyReport } =
+    diversifyChoiceAnswersWithReport(rawParsed)
+  devGroup('答案分散', () => {
+    devLog('diversify', diversifyReport.reason)
+    devLog('diversify', '分散前:', diversifyReport.before)
+    devLog('diversify', '分散后:', diversifyReport.after)
+    if (diversifyReport.triggered) {
+      devLog(
+        'diversify',
+        '变更:',
+        diversifyReport.changes.map((c) => `第${c.questionIndex}题 ${c.from}→${c.to}`).join(', ') ||
+          '（目标已与当前相同，未改）',
+      )
+      devLog('diversify', '选项/解析/图形已同步交换，入库为分散后版本')
+    }
+  })
+  const raw = diversified.map((q) => {
     if (q.tuxing && isGridTuxing(q.tuxing)) {
       return {
         ...q,

@@ -91,22 +91,75 @@ function countUniqueAnswers(questions: ChoiceQuestionLike[]): number {
 }
 
 /** 将单选题答案分散到 A/B/C/D，通过交换选项内容保持题目正确性 */
-export function diversifyChoiceAnswers<Q extends ChoiceQuestionLike>(questions: Q[]): Q[] {
+export interface AnswerDiversifyReport {
+  triggered: boolean
+  reason: string
+  before: string
+  after: string
+  uniqueBefore: number
+  uniqueAfter: number
+  changes: Array<{ questionIndex: number; from: AnswerKey; to: AnswerKey }>
+}
+
+export function summarizeAnswerKeys(questions: ChoiceQuestionLike[]): string {
+  return questions
+    .map((q, i) => {
+      if (q.type !== 'single' || !q.options?.length) return `${i + 1}:-`
+      return `${i + 1}:${parseAnswerKey(q.answer) ?? '?'}`
+    })
+    .join(', ')
+}
+
+export function diversifyChoiceAnswersWithReport<Q extends ChoiceQuestionLike>(
+  questions: Q[],
+): { questions: Q[]; report: AnswerDiversifyReport } {
+  const before = summarizeAnswerKeys(questions)
   const indices: number[] = []
   questions.forEach((q, i) => {
     if (q.type === 'single' && q.options?.length === 4 && parseAnswerKey(q.answer)) {
       indices.push(i)
     }
   })
-  if (indices.length <= 1) return questions
+
+  if (indices.length <= 1) {
+    const choiceQs = indices.map((i) => questions[i]!)
+    const unique = countUniqueAnswers(choiceQs)
+    return {
+      questions,
+      report: {
+        triggered: false,
+        reason: '仅 1 道四选一单选题，无需分散',
+        before,
+        after: before,
+        uniqueBefore: unique,
+        uniqueAfter: unique,
+        changes: [],
+      },
+    }
+  }
 
   const choiceQs = indices.map((i) => questions[i]!)
-  const unique = countUniqueAnswers(choiceQs)
-  const needSpread = unique < Math.min(indices.length, 4) && indices.length >= 2
-  if (!needSpread) return questions
+  const uniqueBefore = countUniqueAnswers(choiceQs)
+  const needSpread = uniqueBefore < Math.min(indices.length, 4) && indices.length >= 2
+
+  if (!needSpread) {
+    return {
+      questions,
+      report: {
+        triggered: false,
+        reason: `AI 答案已分散（${uniqueBefore} 种不同选项）`,
+        before,
+        after: before,
+        uniqueBefore,
+        uniqueAfter: uniqueBefore,
+        changes: [],
+      },
+    }
+  }
 
   const targets = buildTargetKeys(indices.length)
   const out = [...questions]
+  const changes: AnswerDiversifyReport['changes'] = []
 
   indices.forEach((qi, idx) => {
     const q = out[qi]!
@@ -114,7 +167,26 @@ export function diversifyChoiceAnswers<Q extends ChoiceQuestionLike>(questions: 
     const target = targets[idx]!
     if (!current || current === target) return
     out[qi] = remapAnswerKey(q, current, target)
+    changes.push({ questionIndex: qi + 1, from: current, to: target })
   })
 
-  return out
+  const after = summarizeAnswerKeys(out)
+  const uniqueAfter = countUniqueAnswers(indices.map((i) => out[i]!))
+
+  return {
+    questions: out,
+    report: {
+      triggered: true,
+      reason: `AI 返回重复答案（${uniqueBefore} 种），已交换选项内容分散`,
+      before,
+      after,
+      uniqueBefore,
+      uniqueAfter,
+      changes,
+    },
+  }
+}
+
+export function diversifyChoiceAnswers<Q extends ChoiceQuestionLike>(questions: Q[]): Q[] {
+  return diversifyChoiceAnswersWithReport(questions).questions
 }
