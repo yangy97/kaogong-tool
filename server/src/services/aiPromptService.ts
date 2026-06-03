@@ -4,6 +4,7 @@ import { getModulePromptHints } from '../data/modulePromptHints'
 import { buildStrictDifficultyBlock, type Difficulty } from '../utils/difficultyConfig'
 import { buildTuxingPromptIfNeeded } from '../data/tuxingAiSchema'
 import { isTuxingTopicId } from '../types/tuxing'
+import { buildAnswerDiversityPrompt } from '../utils/answerDiversify'
 
 export function buildAiPrompt(
   module: ExamModule,
@@ -30,6 +31,7 @@ export function buildAiPrompt(
     getModulePromptHints(module, difficulty, topic),
     buildStrictDifficultyBlock(difficulty as Difficulty, module.name).replace(/\s+/g, ' ').trim(),
     isTuxing ? buildTuxingPromptIfNeeded(topic?.id) : '',
+    !isEssay && count > 1 ? buildAnswerDiversityPrompt(count) : '',
     module.id === 'ziliao' ? '资料 stem：表格与设问分行，设问禁止写在表格最后一格或额外列。' : '',
     '只输出 JSON 数组，无 markdown、无解释。stem 表格用 \\n 换行。',
     `格式：${jsonExample}`,

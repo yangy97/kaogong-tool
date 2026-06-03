@@ -4,6 +4,8 @@ import type { XhsPostContent } from '@/types'
 defineProps<{
   post: XhsPostContent | null
   publishing: boolean
+  previousDayDate?: string | null
+  previousDayCount?: number
   xhsImageCount?: number
   douyinImageCount?: number
 }>()
@@ -26,7 +28,10 @@ const emit = defineEmits<{
 
     <el-scrollbar max-height="200" class="preview-scroll">
       <div class="preview-box">
+        <div class="title-label">发布标题</div>
         <div class="title">{{ post.title }}</div>
+        <el-text type="info" size="small" class="cover-hint">{{ post.coverHint }}</el-text>
+        <div class="body-label">正文预览</div>
         <pre class="body">{{ post.body.slice(0, 300) }}{{ post.body.length > 300 ? '…' : '' }}</pre>
         <div class="tags">
           <el-tag
@@ -83,10 +88,28 @@ const emit = defineEmits<{
     </el-card>
 
     <el-alert
+      v-if="previousDayCount"
+      type="success"
+      :closable="false"
+      show-icon
+      :title="`文案已包含昨日（${previousDayDate}）${previousDayCount} 题答案；今日题目答案明日揭晓。配图含昨日解析图 + 今日题目图。`"
+      class="tip-alert"
+    />
+
+    <el-alert
+      v-else
+      type="warning"
+      :closable="false"
+      show-icon
+      title="今日题目不含答案（明日揭晓）。首次发布无昨日答案段；从第二天起会自动附带前一日答案。"
+      class="tip-alert"
+    />
+
+    <el-alert
       type="info"
       :closable="false"
       show-icon
-      title="发布流程：复制文案 → 下载对应平台 ZIP → 打开创作中心上传图片并粘贴文案。"
+      title="发布流程：复制文案（首行即标题）→ 下载对应平台 ZIP → 打开创作中心上传图片并粘贴文案。"
       class="tip-alert"
     />
   </el-card>
@@ -100,7 +123,7 @@ const emit = defineEmits<{
   top: 16px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .publish-panel {
     position: static;
     top: auto;
@@ -122,11 +145,28 @@ const emit = defineEmits<{
   padding: 16px;
 }
 
+.title-label,
+.body-label {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 4px;
+}
+
+.body-label {
+  margin-top: 12px;
+}
+
 .title {
   font-size: 15px;
   font-weight: 700;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   color: var(--el-color-primary);
+  line-height: 1.4;
+}
+
+.cover-hint {
+  display: block;
+  line-height: 1.45;
 }
 
 .body {

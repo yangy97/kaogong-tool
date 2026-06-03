@@ -116,7 +116,6 @@ watch(
           :xs="12"
           :sm="8"
           :md="6"
-          :lg="4"
         >
           <el-card shadow="hover" class="thumb-card" :body-style="{ padding: '0' }">
             <el-image

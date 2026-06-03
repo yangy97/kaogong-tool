@@ -62,6 +62,8 @@ export interface VocabCategory {
 export interface XhsPostContent {
   title: string
   body: string
+  /** 仅今日题目段落，用于组装复制文案 */
+  todayBody?: string
   tags: string[]
   coverHint: string
 }

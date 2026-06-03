@@ -125,6 +125,7 @@ export interface GenerateRequest {
 export interface XhsPostContent {
   title: string
   body: string
+  todayBody?: string
   tags: string[]
   coverHint: string
 }
@@ -134,4 +135,48 @@ export interface PublishPayload {
   questions: Question[]
 }
 
-export type AppMode = 'exam' | 'vocab'
+export type AppMode = 'exam' | 'vocab' | 'history'
+
+export interface QuestionSetRecord {
+  id: number
+  postDate: string
+  moduleId: string
+  moduleName: string
+  topicId?: string
+  topicName?: string
+  questionCount: number
+  questions: Question[]
+  source: 'ai' | 'vocab'
+  savedAt: string
+}
+
+export interface QuestionSetSummary {
+  id: number
+  postDate: string
+  moduleId: string
+  moduleName: string
+  topicId?: string
+  topicName?: string
+  questionCount: number
+  source: 'ai' | 'vocab'
+  savedAt: string
+  previewStem: string
+  hasTuxing: boolean
+  hasTable: boolean
+}
+
+export interface PrepareResult {
+  post: XhsPostContent
+  copyText: string
+  creatorUrl: string
+  douyinPost: XhsPostContent
+  douyinCopyText: string
+  douyinCreatorUrl: string
+  imageCount: number
+  questions: Question[]
+  previousDayQuestions: Question[]
+  previousDayDate: string | null
+  savedDate: string
+  includeTodayAnswers?: boolean
+  questionSetId?: number | null
+}

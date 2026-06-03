@@ -32,6 +32,7 @@ declare module 'vue' {
     ElMain: typeof import('element-plus/es')['ElMain']
     ElOption: typeof import('element-plus/es')['ElOption']
     ElOptionGroup: typeof import('element-plus/es')['ElOptionGroup']
+    ElPagination: typeof import('element-plus/es')['ElPagination']
     ElRadioButton: typeof import('element-plus/es')['ElRadioButton']
     ElRadioGroup: typeof import('element-plus/es')['ElRadioGroup']
     ElRow: typeof import('element-plus/es')['ElRow']
@@ -45,6 +46,7 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElText: typeof import('element-plus/es')['ElText']
     FormSelect: typeof import('./src/components/FormSelect.vue')['default']
+    HistoryPanel: typeof import('./src/components/HistoryPanel.vue')['default']
     ImageGallery: typeof import('./src/components/ImageGallery.vue')['default']
     LoadingOverlay: typeof import('./src/components/LoadingOverlay.vue')['default']
     ModeTabs: typeof import('./src/components/ModeTabs.vue')['default']
@@ -55,5 +57,8 @@ declare module 'vue' {
     TopicSelector: typeof import('./src/components/TopicSelector.vue')['default']
     TuxingBlock: typeof import('./src/components/TuxingBlock.vue')['default']
     VocabPanel: typeof import('./src/components/VocabPanel.vue')['default']
+  }
+  export interface GlobalDirectives {
+    vLoading: typeof import('element-plus/es')['ElLoadingDirective']
   }
 }

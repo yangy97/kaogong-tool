@@ -7,6 +7,7 @@ import VocabPanel from '@/components/VocabPanel.vue'
 import QuestionCard from '@/components/QuestionCard.vue'
 import PublishPanel from '@/components/PublishPanel.vue'
 import ImageGallery from '@/components/ImageGallery.vue'
+import HistoryPanel from '@/components/HistoryPanel.vue'
 import ModeTabs from '@/components/ModeTabs.vue'
 import { ElMessage } from 'element-plus'
 import type { SelectGroup, SelectOption } from '@/types/form'
@@ -22,6 +23,7 @@ import type {
   VocabItem,
   VocabWebLookupResult,
   XhsPostContent,
+  PrepareResult,
 } from '@/types'
 import {
   copyToClipboard,
@@ -73,6 +75,11 @@ const xhsImages = ref<GeneratedImage[]>([])
 const douyinImages = ref<GeneratedImage[]>([])
 const xhsZipName = ref('考公小红书配图.zip')
 const douyinZipName = ref('考公抖音配图.zip')
+const previousDayQuestions = ref<Question[]>([])
+const previousDayDate = ref<string | null>(null)
+const includeTodayAnswers = ref(false)
+const loadedHistoryId = ref<number | null>(null)
+const historyPanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
 const imageLoading = ref(false)
 const loadingPlatform = ref<ImagePlatform | null>(null)
 let generateAbort: AbortController | null = null
@@ -109,19 +116,43 @@ function setLoading(msg: string, sub = '') {
   loadingSubMessage.value = sub
 }
 
-function resetOutput() {
-  post.value = null
-  questions.value = []
-  source.value = null
-  sourceMode.value = ''
+function clearImageCache() {
   revokeImageUrls(xhsImages.value)
   revokeImageUrls(douyinImages.value)
   xhsImages.value = []
   douyinImages.value = []
 }
 
+function applyPrepareResult(xhs: PrepareResult) {
+  post.value = xhs.post
+  copyText.value = xhs.copyText
+  douyinCopyText.value = xhs.douyinCopyText
+  creatorUrl.value = xhs.creatorUrl
+  douyinCreatorUrl.value = xhs.douyinCreatorUrl
+  previousDayQuestions.value = xhs.previousDayQuestions
+  previousDayDate.value = xhs.previousDayDate
+  includeTodayAnswers.value = xhs.includeTodayAnswers ?? false
+  if (xhs.questions.length) {
+    questions.value = xhs.questions
+  }
+  clearImageCache()
+}
+
+function resetOutput() {
+  post.value = null
+  questions.value = []
+  source.value = null
+  sourceMode.value = ''
+  loadedHistoryId.value = null
+  previousDayQuestions.value = []
+  previousDayDate.value = null
+  includeTodayAnswers.value = false
+  clearImageCache()
+}
+
 const sourceLabel = computed(() => {
   if (source.value === 'vocab') return '词汇随机抽取'
+  if (sourceMode.value === 'history') return '历史存档'
   if (source.value !== 'ai') return ''
   const p = aiProviders.value.find((x) => x.id === (activeAiProvider.value as AiProviderId))
   const tag = p?.name ? `${p.name}/` : ''
@@ -226,8 +257,8 @@ watch(selectedModuleId, (id) => {
 })
 
 watch(appMode, (mode) => {
-  resetOutput()
   if (mode === 'vocab') loadVocabList()
+  if (mode === 'history') void historyPanelRef.value?.refresh()
 })
 
 async function loadVocabMeta() {
@@ -337,15 +368,15 @@ async function handleGenerate() {
     activeExpertTag.value = res.expertTag ?? questions.value.find((q) => q.expertTag)?.expertTag ?? ''
 
     setLoading('正在准备发布文案…', '即将完成，也可取消')
-    const xhs = await api.prepareXhs(res.questions, { signal })
-    post.value = xhs.post
-    copyText.value = xhs.copyText
-    douyinCopyText.value = xhs.douyinCopyText
-    creatorUrl.value = xhs.creatorUrl
-    douyinCreatorUrl.value = xhs.douyinCreatorUrl
+    const xhs = await api.prepareXhs(res.questions, { signal, source: 'ai' })
+    applyPrepareResult(xhs)
+    void historyPanelRef.value?.refresh()
 
     const topicHint = res.topic ? `（${res.topic.name}）` : ''
-    showToast(`已生成 ${questions.value.length} 道题${topicHint}`)
+    const prevHint = xhs.previousDayQuestions.length
+      ? `，已附带昨日 ${xhs.previousDayQuestions.length} 题答案`
+      : ''
+    showToast(`已生成 ${questions.value.length} 道题${topicHint}${prevHint}`)
     void prefetchCoverPreviews()
   })
 }
@@ -362,14 +393,14 @@ async function handleVocabGenerate() {
     sourceMode.value = 'vocab-random'
 
     setLoading('正在准备发布文案…')
-    const xhs = await api.prepareXhs(questions.value, { signal })
-    post.value = xhs.post
-    copyText.value = xhs.copyText
-    douyinCopyText.value = xhs.douyinCopyText
-    creatorUrl.value = xhs.creatorUrl
-    douyinCreatorUrl.value = xhs.douyinCreatorUrl
+    const xhs = await api.prepareXhs(questions.value, { signal, source: 'vocab' })
+    applyPrepareResult(xhs)
+    void historyPanelRef.value?.refresh()
 
-    showToast(`已随机抽取 ${questions.value.length} 道词汇题`)
+    const prevHint = xhs.previousDayQuestions.length
+      ? `，已附带昨日 ${xhs.previousDayQuestions.length} 题答案`
+      : ''
+    showToast(`已随机抽取 ${questions.value.length} 道词汇题${prevHint}`)
     void prefetchCoverPreviews()
   })
 }
@@ -423,7 +454,11 @@ async function ensureImages(platform: ImagePlatform): Promise<GeneratedImage[]> 
   const cache = platform === 'xhs' ? xhsImages : douyinImages
   if (cache.value.length) return cache.value
 
-  const generated = await generatePlatformImages(questions.value, post.value, platform)
+  const generated = await generatePlatformImages(questions.value, post.value, platform, {
+    answerQuestions: includeTodayAnswers.value ? [] : previousDayQuestions.value,
+    answerDate: previousDayDate.value ?? undefined,
+    includeTodayAnswers: includeTodayAnswers.value,
+  })
     const date = new Date().toISOString().slice(0, 10)
     if (platform === 'xhs') {
       xhsImages.value = generated
@@ -524,6 +559,31 @@ async function handleCopyDouyin() {
     showToast('抖音文案已复制')
   } catch {
     showToast('复制失败')
+  }
+}
+
+async function handleHistoryView(id: number) {
+  loading.value = true
+  setLoading('正在加载历史题目…', '准备发布文案')
+  try {
+    const xhs = await api.prepareHistorySet(id)
+    applyPrepareResult(xhs)
+    loadedHistoryId.value = id
+    source.value = xhs.questions[0]?.type === 'vocab' ? 'vocab' : 'ai'
+    sourceMode.value = 'history'
+
+    const prevHint = xhs.previousDayQuestions.length
+      ? `，文案已含昨日 ${xhs.previousDayQuestions.length} 题答案`
+      : ''
+    showToast(`已加载历史 #${id}，共 ${xhs.questions.length} 题${prevHint}`)
+    void prefetchCoverPreviews()
+    await nextTick()
+    document.getElementById('loaded-questions')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : '加载失败')
+  } finally {
+    loading.value = false
+    loadingSubMessage.value = ''
   }
 }
 </script>
@@ -685,6 +745,14 @@ async function handleCopyDouyin() {
         </el-card>
       </template>
 
+      <template v-else-if="appMode === 'history'">
+        <HistoryPanel
+          ref="historyPanelRef"
+          :active-id="loadedHistoryId"
+          @view="handleHistoryView"
+        />
+      </template>
+
       <template v-else>
         <VocabPanel
           v-model:keyword="vocabKeyword"
@@ -708,11 +776,14 @@ async function handleCopyDouyin() {
       </div>
 
       <template v-if="questions.length">
-        <el-row :gutter="24" class="content-grid">
-          <el-col :xs="24" :lg="16">
+        <div id="loaded-questions" class="content-grid">
+          <div class="content-main">
             <div class="questions">
               <div class="section-head">
                 <h2>题目列表</h2>
+                <el-tag v-if="loadedHistoryId" type="info" effect="plain" round>
+                  历史 #{{ loadedHistoryId }}
+                </el-tag>
                 <el-tag v-if="sourceLabel" type="danger" effect="plain" round>
                   {{ sourceLabel }}
                 </el-tag>
@@ -724,11 +795,13 @@ async function handleCopyDouyin() {
                 :index="i"
               />
             </div>
-          </el-col>
-          <el-col :xs="24" :lg="8">
+          </div>
+          <aside v-if="post" class="content-side">
             <PublishPanel
               :post="post"
               :publishing="publishing"
+              :previous-day-date="previousDayDate"
+              :previous-day-count="previousDayQuestions.length"
               :xhs-image-count="xhsImages.length"
               :douyin-image-count="douyinImages.length"
               @copy-xhs="handleCopyXhs"
@@ -738,11 +811,10 @@ async function handleCopyDouyin() {
               @publish-xhs="handlePublishPlatform('xhs')"
               @publish-douyin="handlePublishPlatform('douyin')"
             />
-          </el-col>
-        </el-row>
-
+          </aside>
+        </div>
         <ImageGallery
-          v-if="post && questions.length"
+          v-if="post"
           :xhs-images="xhsImages"
           :douyin-images="douyinImages"
           :xhs-zip-name="xhsZipName"
@@ -756,8 +828,8 @@ async function handleCopyDouyin() {
       </template>
 
       <el-empty
-        v-else-if="!loading"
-        :description="appMode === 'exam' ? '选择模块和考点后点击「AI 按考点生成题目」' : '浏览词汇库，或点击「生成词汇题」开始'"
+        v-else-if="!loading && appMode !== 'history'"
+        :description="appMode === 'exam' ? '选择模块和考点后点击「AI 按考点生成题目」' : appMode === 'vocab' ? '浏览词汇库，或点击「生成词汇题」开始' : '切换到刷题或词汇页生成题目'"
         class="empty"
       >
         <template #image>
@@ -931,7 +1003,26 @@ h1 {
 }
 
 .content-grid {
-  margin-bottom: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 24px;
+  align-items: start;
+  margin-bottom: 24px;
+}
+
+.content-main {
+  min-width: 0;
+}
+
+.content-side {
+  min-width: 0;
+}
+
+/* 与 ui.css 中 --layout-stack-bp 保持一致 */
+@media (max-width: 768px) {
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .questions {

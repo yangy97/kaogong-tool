@@ -131,25 +131,35 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  prepareXhs: (questions: import('@/types').Question[], opts?: { signal?: AbortSignal }) =>
-    request<{
-      post: import('@/types').XhsPostContent
-      copyText: string
-      creatorUrl: string
-      douyinPost: import('@/types').XhsPostContent
-      douyinCopyText: string
-      douyinCreatorUrl: string
-      imageCount: number
-      _meta?: {
-        durationMs: number
-        xhsTitle: string
-        xhsTags: string[]
-        imageCount: number
-      }
-    }>('/xhs/prepare', {
+  prepareXhs: (
+    questions: import('@/types').Question[],
+    opts?: { signal?: AbortSignal; source?: 'ai' | 'vocab' },
+  ) =>
+    request<import('@/types').PrepareResult>('/xhs/prepare', {
       method: 'POST',
-      body: JSON.stringify({ questions }),
+      body: JSON.stringify({ questions, source: opts?.source }),
       signal: opts?.signal,
+    }),
+
+  listQuestionHistory: (params?: { page?: number; pageSize?: number }) => {
+    const qs = new URLSearchParams()
+    if (params?.page) qs.set('page', String(params.page))
+    if (params?.pageSize) qs.set('pageSize', String(params.pageSize))
+    const query = qs.toString()
+    return request<{
+      items: import('@/types').QuestionSetSummary[]
+      total: number
+      page: number
+      pageSize: number
+    }>(`/xhs/history${query ? `?${query}` : ''}`)
+  },
+
+  getQuestionHistory: (id: number) =>
+    request<{ record: import('@/types').QuestionSetRecord }>(`/xhs/history/${id}`),
+
+  prepareHistorySet: (id: number) =>
+    request<import('@/types').PrepareResult>(`/xhs/history/${id}/prepare`, {
+      method: 'POST',
     }),
 
   health: () =>

@@ -8,6 +8,8 @@ import { buildStrictDifficultyBlock, getAiTemperature, type Difficulty } from '.
 import { normalizeStemTables } from '../utils/stemFormat'
 import { compactAnalysis } from '../utils/analysisNormalize'
 import { normalizeTuxingFromAi } from '../utils/tuxingNormalize'
+import { isGridTuxing, syncTuxingAnalysis } from '../utils/tuxingAnalysisSync'
+import { diversifyChoiceAnswers } from '../utils/answerDiversify'
 import { isTuxingTopicId } from '../types/tuxing'
 import { devGroup, devLog, preview } from '../utils/devLog'
 
@@ -37,15 +39,19 @@ function parseAiResponse(text: string, expertPrefix?: string, isTuxing = false):
       isTuxing && tuxing
         ? ['A', 'B', 'C', 'D'].map((key) => ({ key, text: '' }))
         : q.options
+    let analysis = normalizeAnalysis(q.analysis ?? '', {
+      expertPrefix,
+      answer: q.answer,
+      isEssay: q.type === 'essay',
+    })
+    if (tuxing && isGridTuxing(tuxing)) {
+      analysis = syncTuxingAnalysis(tuxing, q.answer ?? 'A', expertPrefix)
+    }
     return {
       ...q,
       options,
       tuxing,
-      analysis: normalizeAnalysis(q.analysis ?? '', {
-        expertPrefix,
-        answer: q.answer,
-        isEssay: q.type === 'essay',
-      }),
+      analysis,
       stem: normalizeStem(isTuxing ? '下列选项中，符合所给图形变化规律的是：' : (q.stem ?? '')),
     }
   })
@@ -229,7 +235,16 @@ export async function generateViaAi(
     devLog('AI', 'rawPreview:', preview(content, 200))
   })
 
-  const raw = parseAiResponse(content, expert?.analysisPrefix, isTuxingTopicId(topic?.id))
+  const rawParsed = parseAiResponse(content, expert?.analysisPrefix, isTuxingTopicId(topic?.id))
+  const raw = diversifyChoiceAnswers(rawParsed).map((q) => {
+    if (q.tuxing && isGridTuxing(q.tuxing)) {
+      return {
+        ...q,
+        analysis: syncTuxingAnalysis(q.tuxing, q.answer ?? 'A', expert?.analysisPrefix),
+      }
+    }
+    return q
+  })
   const questions = raw.slice(0, count).map((q, i) => ({
     id: `${module.id}-ai-${Date.now()}-${i}`,
     moduleId: module.id,
@@ -248,6 +263,7 @@ export async function generateViaAi(
     answer: q.answer,
     difficulty: q.difficulty,
   })))
+  devLog('AI', 'answerKeys:', questions.map((q) => q.answer).join(', '))
 
   return { questions, model, providerId, expertTag: expert?.name }
 }

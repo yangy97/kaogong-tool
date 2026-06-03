@@ -92,6 +92,20 @@ function renderCoverBrandHeader(platform: ImagePlatform): string {
   `
 }
 
+function coverTitleFontSize(title: string, platform: ImagePlatform): number {
+  const len = title.length
+  if (platform === 'douyin') {
+    if (len > 20) return 42
+    if (len > 16) return 50
+    if (len > 12) return 58
+    return 64
+  }
+  if (len > 20) return 52
+  if (len > 16) return 64
+  if (len > 12) return 72
+  return 80
+}
+
 function createCardElement(
   content: string,
   platform: ImagePlatform,
@@ -131,6 +145,7 @@ function createCardElement(
   `
 
   if (isCover) {
+    const titleSize = coverTitleFontSize(options.title, platform)
     if (platform === 'douyin') {
       const accent2 = (cfg as typeof PLATFORM_CONFIG.douyin).accent2
       const coverPad = `padding:${COVER_CONTENT_TOP.douyin}px 48px ${DOUYIN_COVER_SAFE.bottom}px`
@@ -138,7 +153,7 @@ function createCardElement(
         <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;${coverPad};box-sizing:border-box;">
           ${renderCoverBrandHeader(platform)}
           <div style="width:120px;height:6px;background:linear-gradient(90deg,${cfg.accent},${accent2});border-radius:3px;margin:20px auto 24px;"></div>
-          <div style="font-size:64px;font-weight:900;line-height:1.2;margin-bottom:16px;letter-spacing:1px;">${options.title}</div>
+          <div style="font-size:${titleSize}px;font-weight:900;line-height:1.25;margin-bottom:16px;letter-spacing:1px;max-width:960px;">${options.title}</div>
           <div style="font-size:34px;opacity:0.88;font-weight:500;margin-bottom:32px;">${options.subtitle ?? ''}</div>
           <div style="font-size:26px;opacity:0.9;padding:14px 36px;border:2px solid ${cfg.accent};border-radius:40px;color:${cfg.accent};">
             ${cfg.coverBadge}
@@ -150,7 +165,7 @@ function createCardElement(
         <div style="flex:1;display:flex;flex-direction:column;height:100%;padding-top:${COVER_CONTENT_TOP.xhs}px;box-sizing:border-box;">
           ${renderCoverBrandHeader(platform)}
           <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;padding-top:48px;">
-            <div style="font-size:80px;font-weight:900;line-height:1.2;margin-bottom:20px;letter-spacing:1px;">${options.title}</div>
+            <div style="font-size:${titleSize}px;font-weight:900;line-height:1.25;margin-bottom:20px;letter-spacing:1px;max-width:960px;">${options.title}</div>
             <div style="font-size:40px;opacity:0.88;font-weight:500;">${options.subtitle ?? ''}</div>
             <div style="margin-top:auto;margin-bottom:48px;font-size:28px;opacity:0.85;padding:16px 40px;border:2px solid rgba(255,255,255,0.6);border-radius:40px;">
               ${cfg.coverBadge}
@@ -201,11 +216,12 @@ async function renderToBlob(
   })
 }
 
-function buildCoverTitle(questions: Question[], platform: ImagePlatform): string {
+function buildCoverTitle(post: XhsPostContent, questions: Question[], platform: ImagePlatform): string {
+  if (post.title) return post.title
   const moduleName = questions[0]?.moduleName ?? '考公刷题'
   const topicLabel = questions[0]?.topicName ? `${questions[0].topicName}·` : ''
   const count = questions.length
-  const maxLen = platform === 'douyin' ? 18 : 20
+  const maxLen = platform === 'douyin' ? 22 : 24
   const title =
     platform === 'douyin'
       ? `${topicLabel}${moduleName}刷题${count}题`
@@ -264,86 +280,139 @@ function formatAnalysisForCardDisplay(analysis: string): string {
     .trim()
 }
 
+export interface ImageGenOptions {
+  /** 昨日存档题目，仅生成其解析图 */
+  answerQuestions?: Question[]
+  /** 昨日日期，用于解析图文件名 */
+  answerDate?: string
+  /** 为今日题目同时生成解析图（历史完整发布） */
+  includeTodayAnswers?: boolean
+}
+
+async function renderQuestionCard(
+  q: Question,
+  index: number,
+  platform: ImagePlatform,
+  folder: string,
+  fileIndex: number,
+): Promise<GeneratedImage> {
+  const num = String(index + 1).padStart(2, '0')
+  let content = q.stem
+  let contentHtml = stemToHtml(q.stem, { dark: platform === 'douyin' })
+  if (q.tuxing) {
+    contentHtml += tuxingToHtml(q.tuxing, { figureSize: 64, dark: platform === 'douyin' })
+  } else if (q.options?.length) {
+    const optsText = q.options.map((o) => `${o.key}. ${o.text}`).join('\n')
+    content += '\n\n' + optsText
+    const optsHtml = q.options
+      .map(
+        (o) =>
+          `<div style="margin-top:12px;padding:10px 14px;background:${platform === 'douyin' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'};border-radius:8px;">${o.key}. ${o.text.replace(/</g, '&lt;')}</div>`,
+      )
+      .join('')
+    contentHtml += `<div style="margin-top:20px;">${optsHtml}</div>`
+  }
+
+  const qBlob = await renderToBlob(
+    createCardElement(content, platform, {
+      title: q.moduleName,
+      theme: 'question',
+      index,
+      contentHtml,
+    }),
+    platform,
+  )
+  return {
+    filename: `${String(fileIndex).padStart(2, '0')}-第${num}题-题目-${folder}.png`,
+    label: `第 ${index + 1} 题 · 题目`,
+    blob: qBlob,
+    url: URL.createObjectURL(qBlob),
+    platform,
+  }
+}
+
+async function renderAnswerCard(
+  q: Question,
+  index: number,
+  platform: ImagePlatform,
+  folder: string,
+  fileIndex: number,
+  dateLabel?: string,
+): Promise<GeneratedImage> {
+  const num = String(index + 1).padStart(2, '0')
+  const datePrefix = dateLabel ? `${dateLabel}-` : ''
+  const answerContent = q.options
+    ? `✅ 答案：${q.answer}\n\n📖 解析：\n${formatAnalysisForPublishImage(q.analysis, q.expertStyleLabel)}`
+    : `📝 参考答案：\n${q.answer}\n\n📖 思路：\n${formatAnalysisForPublishImage(q.analysis, q.expertStyleLabel)}`
+
+  const aBlob = await renderToBlob(
+    createCardElement(answerContent, platform, {
+      title: dateLabel ? `昨日答案 · ${dateLabel}` : '答案与解析',
+      theme: 'answer',
+      index,
+    }),
+    platform,
+  )
+  return {
+    filename: `${String(fileIndex).padStart(2, '0')}-${datePrefix}第${num}题-解析-${folder}.png`,
+    label: dateLabel ? `昨日第 ${index + 1} 题 · 解析` : `第 ${index + 1} 题 · 解析`,
+    blob: aBlob,
+    url: URL.createObjectURL(aBlob),
+    platform,
+  }
+}
+
 export async function generatePlatformImages(
   questions: Question[],
-  _post: XhsPostContent,
+  post: XhsPostContent,
   platform: ImagePlatform,
+  options?: ImageGenOptions,
 ): Promise<GeneratedImage[]> {
   const images: GeneratedImage[] = []
   const folder = platform === 'xhs' ? '小红书' : '抖音'
+  let fileIndex = 1
+  const coverTitle = buildCoverTitle(post, questions, platform)
+  const coverSubtitle = `${questions.length} 题 · ${questions[0]?.moduleName ?? '考公刷题'}`
 
   const coverBlob = await renderToBlob(
     createCardElement('', platform, {
-      title: buildCoverTitle(questions, platform),
-      subtitle: questions[0]?.moduleName ?? '考公刷题',
+      title: coverTitle,
+      subtitle: coverSubtitle,
       theme: 'cover',
     }),
     platform,
   )
   images.push({
-    filename: `01-封面-${folder}.png`,
+    filename: `${String(fileIndex).padStart(2, '0')}-封面-${folder}.png`,
     label: `封面 · ${folder}`,
     blob: coverBlob,
     url: URL.createObjectURL(coverBlob),
     platform,
   })
+  fileIndex++
 
   for (let i = 0; i < questions.length; i++) {
-    const q = questions[i]
-    const num = String(i + 1).padStart(2, '0')
-
-    let content = q.stem
-    let contentHtml = stemToHtml(q.stem, { dark: platform === 'douyin' })
-    if (q.tuxing) {
-      contentHtml += tuxingToHtml(q.tuxing, { figureSize: 64, dark: platform === 'douyin' })
-    } else if (q.options?.length) {
-      const optsText = q.options.map((o) => `${o.key}. ${o.text}`).join('\n')
-      content += '\n\n' + optsText
-      const optsHtml = q.options
-        .map(
-          (o) =>
-            `<div style="margin-top:12px;padding:10px 14px;background:${platform === 'douyin' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'};border-radius:8px;">${o.key}. ${o.text.replace(/</g, '&lt;')}</div>`,
-        )
-        .join('')
-      contentHtml += `<div style="margin-top:20px;">${optsHtml}</div>`
+    images.push(await renderQuestionCard(questions[i], i, platform, folder, fileIndex))
+    fileIndex++
+    if (options?.includeTodayAnswers) {
+      images.push(await renderAnswerCard(questions[i], i, platform, folder, fileIndex))
+      fileIndex++
     }
+  }
 
-    const qBlob = await renderToBlob(
-      createCardElement(content, platform, {
-        title: q.moduleName,
-        theme: 'question',
-        index: i,
-        contentHtml,
-      }),
-      platform,
+  const answerQuestions = options?.answerQuestions ?? []
+  for (let i = 0; i < answerQuestions.length; i++) {
+    images.push(
+      await renderAnswerCard(
+        answerQuestions[i],
+        i,
+        platform,
+        folder,
+        fileIndex,
+        options?.answerDate,
+      ),
     )
-    images.push({
-      filename: `${String(images.length + 1).padStart(2, '0')}-第${num}题-题目-${folder}.png`,
-      label: `第 ${i + 1} 题 · 题目`,
-      blob: qBlob,
-      url: URL.createObjectURL(qBlob),
-      platform,
-    })
-
-    const answerContent = q.options
-      ? `✅ 答案：${q.answer}\n\n📖 解析：\n${formatAnalysisForPublishImage(q.analysis, q.expertStyleLabel)}`
-      : `📝 参考答案：\n${q.answer}\n\n📖 思路：\n${formatAnalysisForPublishImage(q.analysis, q.expertStyleLabel)}`
-
-    const aBlob = await renderToBlob(
-      createCardElement(answerContent, platform, {
-        title: '答案与解析',
-        theme: 'answer',
-        index: i,
-      }),
-      platform,
-    )
-    images.push({
-      filename: `${String(images.length + 1).padStart(2, '0')}-第${num}题-解析-${folder}.png`,
-      label: `第 ${i + 1} 题 · 解析`,
-      blob: aBlob,
-      url: URL.createObjectURL(aBlob),
-      platform,
-    })
+    fileIndex++
   }
 
   return images
