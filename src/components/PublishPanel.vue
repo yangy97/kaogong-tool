@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { XhsPostContent } from '@/types'
+import { copyToClipboard } from '@/utils/xhsCard'
 
-defineProps<{
+const props = defineProps<{
   post: XhsPostContent | null
   publishing: boolean
   previousDayDate?: string | null
@@ -18,6 +20,21 @@ const emit = defineEmits<{
   publishXhs: []
   publishDouyin: []
 }>()
+
+const titleCopied = ref(false)
+
+async function handleCopyTitle() {
+  if (!props.post?.title) return
+  try {
+    await copyToClipboard(props.post.title)
+    titleCopied.value = true
+    setTimeout(() => {
+      titleCopied.value = false
+    }, 2000)
+  } catch {
+    /* ignore */
+  }
+}
 </script>
 
 <template>
@@ -26,11 +43,17 @@ const emit = defineEmits<{
       <span class="panel-title">📤 一键发布</span>
     </template>
 
-    <el-scrollbar max-height="200" class="preview-scroll">
+    <el-scrollbar max-height="240" class="preview-scroll">
       <div class="preview-box">
-        <div class="title-label">发布标题</div>
-        <div class="title">{{ post.title }}</div>
-        <el-text type="info" size="small" class="cover-hint">{{ post.coverHint }}</el-text>
+        <div class="title-row">
+          <div class="title-block">
+            <div class="title-label">发布标题</div>
+            <div class="title">{{ post.title }}</div>
+          </div>
+          <el-button size="small" type="primary" plain @click="handleCopyTitle">
+            {{ titleCopied ? '已复制' : '复制标题' }}
+          </el-button>
+        </div>
         <div class="body-label">正文预览</div>
         <pre class="body">{{ post.body.slice(0, 300) }}{{ post.body.length > 300 ? '…' : '' }}</pre>
         <div class="tags">
@@ -109,7 +132,7 @@ const emit = defineEmits<{
       type="info"
       :closable="false"
       show-icon
-      title="发布流程：复制文案（首行即标题）→ 下载对应平台 ZIP → 打开创作中心上传图片并粘贴文案。"
+      title="发布流程：复制标题 → 复制文案 → 下载 ZIP → 创作中心上传图片并粘贴。"
       class="tip-alert"
     />
   </el-card>
@@ -145,6 +168,19 @@ const emit = defineEmits<{
   padding: 16px;
 }
 
+.title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.title-block {
+  flex: 1;
+  min-width: 0;
+}
+
 .title-label,
 .body-label {
   font-size: 11px;
@@ -152,21 +188,17 @@ const emit = defineEmits<{
   margin-bottom: 4px;
 }
 
-.body-label {
-  margin-top: 12px;
-}
-
 .title {
   font-size: 15px;
   font-weight: 700;
-  margin-bottom: 6px;
   color: var(--el-color-primary);
   line-height: 1.4;
+  word-break: break-all;
 }
 
-.cover-hint {
-  display: block;
-  line-height: 1.45;
+.title-row .el-button {
+  flex-shrink: 0;
+  margin-top: 14px;
 }
 
 .body {

@@ -92,20 +92,6 @@ function renderCoverBrandHeader(platform: ImagePlatform): string {
   `
 }
 
-function coverTitleFontSize(title: string, platform: ImagePlatform): number {
-  const len = title.length
-  if (platform === 'douyin') {
-    if (len > 20) return 42
-    if (len > 16) return 50
-    if (len > 12) return 58
-    return 64
-  }
-  if (len > 20) return 52
-  if (len > 16) return 64
-  if (len > 12) return 72
-  return 80
-}
-
 function createCardElement(
   content: string,
   platform: ImagePlatform,
@@ -145,7 +131,6 @@ function createCardElement(
   `
 
   if (isCover) {
-    const titleSize = coverTitleFontSize(options.title, platform)
     if (platform === 'douyin') {
       const accent2 = (cfg as typeof PLATFORM_CONFIG.douyin).accent2
       const coverPad = `padding:${COVER_CONTENT_TOP.douyin}px 48px ${DOUYIN_COVER_SAFE.bottom}px`
@@ -153,7 +138,7 @@ function createCardElement(
         <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;${coverPad};box-sizing:border-box;">
           ${renderCoverBrandHeader(platform)}
           <div style="width:120px;height:6px;background:linear-gradient(90deg,${cfg.accent},${accent2});border-radius:3px;margin:20px auto 24px;"></div>
-          <div style="font-size:${titleSize}px;font-weight:900;line-height:1.25;margin-bottom:16px;letter-spacing:1px;max-width:960px;">${options.title}</div>
+          <div style="font-size:64px;font-weight:900;line-height:1.2;margin-bottom:16px;letter-spacing:1px;">${options.title}</div>
           <div style="font-size:34px;opacity:0.88;font-weight:500;margin-bottom:32px;">${options.subtitle ?? ''}</div>
           <div style="font-size:26px;opacity:0.9;padding:14px 36px;border:2px solid ${cfg.accent};border-radius:40px;color:${cfg.accent};">
             ${cfg.coverBadge}
@@ -165,7 +150,7 @@ function createCardElement(
         <div style="flex:1;display:flex;flex-direction:column;height:100%;padding-top:${COVER_CONTENT_TOP.xhs}px;box-sizing:border-box;">
           ${renderCoverBrandHeader(platform)}
           <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;padding-top:48px;">
-            <div style="font-size:${titleSize}px;font-weight:900;line-height:1.25;margin-bottom:20px;letter-spacing:1px;max-width:960px;">${options.title}</div>
+            <div style="font-size:80px;font-weight:900;line-height:1.2;margin-bottom:20px;letter-spacing:1px;">${options.title}</div>
             <div style="font-size:40px;opacity:0.88;font-weight:500;">${options.subtitle ?? ''}</div>
             <div style="margin-top:auto;margin-bottom:48px;font-size:28px;opacity:0.85;padding:16px 40px;border:2px solid rgba(255,255,255,0.6);border-radius:40px;">
               ${cfg.coverBadge}
@@ -216,12 +201,11 @@ async function renderToBlob(
   })
 }
 
-function buildCoverTitle(post: XhsPostContent, questions: Question[], platform: ImagePlatform): string {
-  if (post.title) return post.title
+function buildCoverTitle(questions: Question[], platform: ImagePlatform): string {
   const moduleName = questions[0]?.moduleName ?? '考公刷题'
   const topicLabel = questions[0]?.topicName ? `${questions[0].topicName}·` : ''
   const count = questions.length
-  const maxLen = platform === 'douyin' ? 22 : 24
+  const maxLen = platform === 'douyin' ? 18 : 20
   const title =
     platform === 'douyin'
       ? `${topicLabel}${moduleName}刷题${count}题`
@@ -364,20 +348,18 @@ async function renderAnswerCard(
 
 export async function generatePlatformImages(
   questions: Question[],
-  post: XhsPostContent,
+  _post: XhsPostContent,
   platform: ImagePlatform,
   options?: ImageGenOptions,
 ): Promise<GeneratedImage[]> {
   const images: GeneratedImage[] = []
   const folder = platform === 'xhs' ? '小红书' : '抖音'
   let fileIndex = 1
-  const coverTitle = buildCoverTitle(post, questions, platform)
-  const coverSubtitle = `${questions.length} 题 · ${questions[0]?.moduleName ?? '考公刷题'}`
 
   const coverBlob = await renderToBlob(
     createCardElement('', platform, {
-      title: coverTitle,
-      subtitle: coverSubtitle,
+      title: buildCoverTitle(questions, platform),
+      subtitle: questions[0]?.moduleName ?? '考公刷题',
       theme: 'cover',
     }),
     platform,

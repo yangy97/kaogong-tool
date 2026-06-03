@@ -130,8 +130,8 @@ function buildPostBase(
 
   const coverHint =
     platform === 'xhs'
-      ? `发布标题：${title}（文案首行已含，粘贴至小红书标题栏）`
-      : `发布标题：${title}（文案首行已含，粘贴至抖音标题/作品描述顶部）`
+      ? `封面建议：${moduleName} + 今日${count}题 + 考公打卡风格`
+      : `抖音封面：${moduleName}刷题，深色高对比风格`
 
   return { title, body, todayBody, tags, coverHint }
 }
