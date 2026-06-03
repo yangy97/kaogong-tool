@@ -9,6 +9,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   view: [id: number]
+  loaded: [items: QuestionSetSummary[]]
 }>()
 
 const items = ref<QuestionSetSummary[]>([])
@@ -55,9 +56,11 @@ async function loadFirstPage() {
   loading.value = true
   try {
     await fetchPage(1, false)
+    emit('loaded', items.value)
   } catch {
     items.value = []
     total.value = 0
+    emit('loaded', [])
   } finally {
     loading.value = false
   }
@@ -85,7 +88,6 @@ defineExpose({ refresh: loadFirstPage })
     <template #header>
       <div class="head">
         <span class="panel-title">📚 历史题目</span>
-        <el-text type="info" size="small">点击条目查看，下方展示题目与发布面板（与刷题模块一致）</el-text>
       </div>
     </template>
 

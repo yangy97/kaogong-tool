@@ -12,6 +12,8 @@
   --ui-shadow-hover: 0 4px 16px rgba(255, 36, 66, 0.12);
 /* 低于此宽度时主布局由双栏变为单栏（需同步 App.vue、PublishPanel.vue 的 @media） */
   --layout-stack-bp: 768px;
+  /* 历史页：低于此宽度时详情区内发布面板移到题目下方 */
+  --history-detail-stack-bp: 960px;
 }
 
 /* 卡片：灰边 + 圆角，避免刺眼红框 */

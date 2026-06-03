@@ -19,6 +19,7 @@ import type {
   ExamModule,
   ExamPoint,
   Question,
+  QuestionSetSummary,
   VocabCategory,
   VocabItem,
   VocabWebLookupResult,
@@ -258,7 +259,6 @@ watch(selectedModuleId, (id) => {
 
 watch(appMode, (mode) => {
   if (mode === 'vocab') loadVocabList()
-  if (mode === 'history') void historyPanelRef.value?.refresh()
 })
 
 async function loadVocabMeta() {
@@ -562,7 +562,7 @@ async function handleCopyDouyin() {
   }
 }
 
-async function handleHistoryView(id: number) {
+async function handleHistoryView(id: number, opts?: { silent?: boolean }) {
   loading.value = true
   setLoading('正在加载历史题目…', '准备发布文案')
   try {
@@ -572,24 +572,47 @@ async function handleHistoryView(id: number) {
     source.value = xhs.questions[0]?.type === 'vocab' ? 'vocab' : 'ai'
     sourceMode.value = 'history'
 
-    const prevHint = xhs.previousDayQuestions.length
-      ? `，文案已含昨日 ${xhs.previousDayQuestions.length} 题答案`
-      : ''
-    showToast(`已加载历史 #${id}，共 ${xhs.questions.length} 题${prevHint}`)
+    if (!opts?.silent) {
+      const prevHint = xhs.previousDayQuestions.length
+        ? `，文案已含昨日 ${xhs.previousDayQuestions.length} 题答案`
+        : ''
+      showToast(`已加载历史 #${id}，共 ${xhs.questions.length} 题${prevHint}`)
+    }
     void prefetchCoverPreviews()
-    await nextTick()
-    document.getElementById('loaded-questions')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (!opts?.silent) {
+      await nextTick()
+      const target =
+        appMode.value === 'history'
+          ? document.getElementById('history-detail')
+          : document.getElementById('loaded-questions')
+      if (window.innerWidth <= 768) {
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }
   } catch (err) {
-    showToast(err instanceof Error ? err.message : '加载失败')
+    if (!opts?.silent) showToast(err instanceof Error ? err.message : '加载失败')
   } finally {
     loading.value = false
     loadingSubMessage.value = ''
   }
 }
+
+async function handleHistoryLoaded(items: QuestionSetSummary[]) {
+  if (appMode.value !== 'history') return
+  if (!items.length) {
+    resetOutput()
+    loadedHistoryId.value = null
+    return
+  }
+  const currentExists = loadedHistoryId.value != null && items.some((x) => x.id === loadedHistoryId.value)
+  if (!currentExists) {
+    await handleHistoryView(items[0].id, { silent: true })
+  }
+}
 </script>
 
 <template>
-  <el-container class="app">
+  <el-container class="app" :class="{ 'app--history': appMode === 'history' }">
     <LoadingOverlay
       :visible="loading"
       :message="loadingMessage"
@@ -745,13 +768,74 @@ async function handleHistoryView(id: number) {
         </el-card>
       </template>
 
-      <template v-else-if="appMode === 'history'">
-        <HistoryPanel
-          ref="historyPanelRef"
-          :active-id="loadedHistoryId"
-          @view="handleHistoryView"
-        />
-      </template>
+      <div v-else-if="appMode === 'history'" class="history-layout">
+        <aside class="history-sidebar">
+          <HistoryPanel
+            ref="historyPanelRef"
+            :active-id="loadedHistoryId"
+            @view="handleHistoryView"
+            @loaded="handleHistoryLoaded"
+          />
+        </aside>
+        <div id="history-detail" class="history-detail">
+          <template v-if="questions.length">
+            <div class="history-detail-grid">
+              <div class="content-main">
+                <div class="questions">
+                  <div class="section-head">
+                    <h2>题目列表</h2>
+                    <el-tag v-if="loadedHistoryId" type="info" effect="plain" round>
+                      历史 #{{ loadedHistoryId }}
+                    </el-tag>
+                    <el-tag v-if="sourceLabel" type="danger" effect="plain" round>
+                      {{ sourceLabel }}
+                    </el-tag>
+                  </div>
+                  <QuestionCard
+                    v-for="(q, i) in questions"
+                    :key="q.id"
+                    :question="q"
+                    :index="i"
+                  />
+                </div>
+              </div>
+              <aside v-if="post" class="content-side">
+                <PublishPanel
+                  :post="post"
+                  :publishing="publishing"
+                  :previous-day-date="previousDayDate"
+                  :previous-day-count="previousDayQuestions.length"
+                  :xhs-image-count="xhsImages.length"
+                  :douyin-image-count="douyinImages.length"
+                  @copy-xhs="handleCopyXhs"
+                  @copy-douyin="handleCopyDouyin"
+                  @download-xhs="handleDownloadPlatform('xhs')"
+                  @download-douyin="handleDownloadPlatform('douyin')"
+                  @publish-xhs="handlePublishPlatform('xhs')"
+                  @publish-douyin="handlePublishPlatform('douyin')"
+                />
+              </aside>
+            </div>
+            <ImageGallery
+              v-if="post"
+              :xhs-images="xhsImages"
+              :douyin-images="douyinImages"
+              :xhs-zip-name="xhsZipName"
+              :douyin-zip-name="douyinZipName"
+              :image-loading="imageLoading"
+              :loading-platform="loadingPlatform"
+              @download-zip="handleDownloadPlatform"
+              @download-one="handleDownloadOne"
+              @need-images="handleNeedPlatformImages"
+            />
+          </template>
+          <el-empty
+            v-else-if="!loading"
+            description="暂无历史记录，或正在加载…"
+            class="history-detail-empty"
+          />
+        </div>
+      </div>
 
       <template v-else>
         <VocabPanel
@@ -775,7 +859,7 @@ async function handleHistoryView(id: number) {
         </div>
       </div>
 
-      <template v-if="questions.length">
+      <template v-if="questions.length && appMode !== 'history'">
         <div id="loaded-questions" class="content-grid">
           <div class="content-main">
             <div class="questions">
@@ -849,6 +933,10 @@ async function handleHistoryView(id: number) {
   margin: 0 auto;
   min-height: 100vh;
   flex-direction: column;
+}
+
+.app.app--history {
+  max-width: 1440px;
 }
 
 .header {
@@ -1008,6 +1096,134 @@ h1 {
   gap: 24px;
   align-items: start;
   margin-bottom: 24px;
+}
+
+.history-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: min(680px, calc(100vh - 220px));
+  align-items: stretch;
+}
+
+.history-sidebar {
+  border-right: 1px solid var(--ui-border, #e8e8ec);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-sidebar :deep(.history-panel) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.history-sidebar :deep(.history-panel > .el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px !important;
+}
+
+.history-sidebar :deep(.history-panel > .el-card__header) {
+  padding: 12px 14px !important;
+}
+
+.history-sidebar :deep(.list-wrap) {
+  max-height: none;
+  flex: 1;
+  min-height: 0;
+}
+
+.history-sidebar :deep(.preview) {
+  -webkit-line-clamp: 1;
+  font-size: 12px;
+}
+
+.history-sidebar :deep(.history-item) {
+  padding: 10px 12px;
+}
+
+.history-sidebar :deep(.item-title .el-tag) {
+  max-width: 100%;
+}
+
+.history-detail {
+  min-width: 0;
+  padding: 16px 20px 20px;
+  overflow-y: auto;
+  max-height: min(calc(100vh - 200px), 900px);
+}
+
+.history-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 268px;
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.history-detail-grid .content-main {
+  min-width: 0;
+}
+
+.history-detail-grid .content-side {
+  min-width: 0;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+}
+
+.history-detail-grid .content-side :deep(.publish-panel) {
+  position: static;
+  top: auto;
+}
+
+.history-detail-empty {
+  padding: 48px 16px;
+}
+
+/* ≤960px：保留左列表，详情区内题目全宽、发布面板在下方 */
+@media (max-width: 960px) {
+  .history-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-detail-grid .content-side {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+@media (max-width: 768px) {
+  .history-layout {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .history-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--ui-border, #e8e8ec);
+  }
+
+  .history-sidebar :deep(.list-wrap) {
+    max-height: min(420px, 50vh);
+  }
+
+  .history-detail {
+    max-height: none;
+    padding: 16px;
+    overflow-y: visible;
+  }
 }
 
 .content-main {
