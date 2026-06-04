@@ -123,7 +123,7 @@ async function handleCopyTitle() {
       type="success"
       :closable="false"
       show-icon
-      :title="`文案已包含昨日（${previousDayDate}）${previousDayCount} 题答案；今日题目答案明日揭晓。配图含昨日解析图 + 今日题目图。`"
+      :title="`文案：昨日为关键词+答案速查（原题见解析图）；今日小红书含完整题干，抖音题干见配图。`"
       class="tip-alert"
     />
 

@@ -38,6 +38,29 @@ function joinBlocks(blocks: string[]): string {
     .join('\n')
 }
 
+/** 配图序号：①②③…（超过 20 用「第 N 张」） */
+function toCircledNum(n: number): string {
+  if (n >= 1 && n <= 20) return String.fromCharCode(0x2460 + n - 1)
+  return `第${n}张`
+}
+
+function formatCircledRange(start: number, end: number): string {
+  if (start >= end) return toCircledNum(start)
+  return `${toCircledNum(start)}–${toCircledNum(end)}`
+}
+
+/** 昨日答案行：考点名或题干前若干字，便于对号（不重复完整题干） */
+function buildQuestionAnchor(q: Question, maxLen = 14): string {
+  if (q.topicName?.trim()) return q.topicName.trim()
+  const plain = compactStem(q.stem)
+    .replace(/\|[^|]*\|/g, '')
+    .replace(/\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!plain) return ''
+  return plain.length > maxLen ? `${plain.slice(0, maxLen)}…` : plain
+}
+
 function formatQuestionBlock(q: Question, index: number): string {
   let block = `${index + 1}. ${compactStem(q.stem)}`
 
@@ -60,19 +83,36 @@ function formatQuestionWithAnswerBlock(q: Question, index: number): string {
   return block
 }
 
-/** 昨日揭晓：正文只写答案，解析在配图里，控制小红书/抖音 1000 字上限 */
-function formatAnswerBlock(q: Question, index: number): string {
-  if (q.options?.length) {
-    return `${index + 1}. ✅ 答案：${q.answer}`
-  }
-  return `${index + 1}. 📝 参考要点：${q.answer}`
+/** 昨日揭晓：关键词 + 答案速查，完整原题与解析在配图 */
+function formatYesterdayAnswerLine(q: Question, index: number): string {
+  const anchor = buildQuestionAnchor(q)
+  const answer = q.options?.length ? `✅ ${q.answer}` : `📝 ${q.answer}`
+  return anchor
+    ? `${index + 1}. ${anchor} · ${answer}`
+    : `${index + 1}. ${answer}`
 }
 
-export function formatPreviousDaySection(previousDay: PreviousDayPost): string {
+/** 抖音今日：题干在配图，描述区不写全文以控字数 */
+function formatDouyinTodayBrief(questions: Question[]): string {
+  const count = questions.length
+  const moduleName = questions[0]?.moduleName ?? '考公'
+  const topic = questions[0]?.topicName
+  const subject = topic ? `${topic} · ` : ''
+  const range = formatCircledRange(2, 1 + count)
+  return `📋 今日${subject}${moduleName} ${count}题，题干与选项见配图 ${range}`
+}
+
+export function formatPreviousDaySection(
+  previousDay: PreviousDayPost,
+  todayQuestionCount: number,
+): string {
   const count = previousDay.questions.length
   const moduleName = previousDay.questions[0]?.moduleName ?? '考公'
-  const header = `🎯 昨日（${previousDay.date}）${moduleName} ${count}题 · 答案揭晓\n📖 详细解析见配图`
-  const body = previousDay.questions.map((q, i) => formatAnswerBlock(q, i)).join('\n')
+  const imgStart = 2 + todayQuestionCount
+  const imgEnd = imgStart + count - 1
+  const imgRange = formatCircledRange(imgStart, imgEnd)
+  const header = `🎯 昨日（${previousDay.date}）${moduleName} ${count}题 · 答案速查\n📖 原题与解析见配图 ${imgRange}（每张一题，含题干）`
+  const body = previousDay.questions.map((q, i) => formatYesterdayAnswerLine(q, i)).join('\n')
   return joinBlocks([header, body])
 }
 
@@ -105,9 +145,11 @@ function buildPostBase(
       : `🔥 今日${moduleName}专项刷题！\n先做题，答案明天见～`
 
   const includeAnswers = options?.includeAnswers === true
-  const bodyParts = questions.map((q, i) =>
-    includeAnswers ? formatQuestionWithAnswerBlock(q, i) : formatQuestionBlock(q, i),
-  )
+  const bodyParts = includeAnswers
+    ? questions.map((q, i) => formatQuestionWithAnswerBlock(q, i))
+    : platform === 'douyin'
+      ? [formatDouyinTodayBrief(questions)]
+      : questions.map((q, i) => formatQuestionBlock(q, i))
 
   const outro = includeAnswers
     ? platform === 'xhs'
@@ -115,13 +157,13 @@ function buildPostBase(
       : '---\n✅ 答案与解析见配图 👇 评论区说说你做对了几个'
     : platform === 'xhs'
       ? '---\n⏳ 今日答案明日揭晓，先做题吧！ 💬 欢迎在评论区交流做题思路 🔖 收藏起来慢慢做！'
-      : '---\n⏳ 今日答案明天公布 👇 评论区说说你做对了几个'
+      : '---\n⏳ 今日答案明天公布，欢迎评论区交流'
 
   const todayBody = joinBlocks([intro, ...bodyParts, outro])
 
   const bodyBlocks: string[] = []
   if (!includeAnswers && options?.previousDay?.questions.length) {
-    bodyBlocks.push(formatPreviousDaySection(options.previousDay), '---')
+    bodyBlocks.push(formatPreviousDaySection(options.previousDay, count), '---')
   }
   bodyBlocks.push(todayBody)
   const body = joinBlocks(bodyBlocks)
@@ -141,7 +183,7 @@ function buildPostBase(
       ? `封面建议：${moduleName} + 今日${count}题 + 考公打卡风格`
       : `抖音封面：${moduleName}刷题，深色高对比风格`
 
-  return { title, body, todayBody, tags, coverHint }
+  return { title, body, todayBody, tags, coverHint, todayQuestionCount: count }
 }
 
 export function buildXhsPost(questions: Question[], options?: BuildPostOptions): XhsPostContent {
@@ -154,7 +196,8 @@ export function formatCopyText(post: XhsPostContent, options?: BuildPostOptions)
   const todayBody = post.todayBody ?? post.body
   const blocks: string[] = []
   if (!includeAnswers && options?.previousDay?.questions.length) {
-    blocks.push(formatPreviousDaySection(options.previousDay!), '---')
+    const todayCount = post.todayQuestionCount ?? 0
+    blocks.push(formatPreviousDaySection(options.previousDay!, todayCount), '---')
   }
   blocks.push(post.title, todayBody)
   return joinBlocks(blocks)

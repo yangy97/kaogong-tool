@@ -41,8 +41,8 @@ const PLATFORM_CONFIG = {
     textOnCover: '#fff',
     textOnCard: '#f0f0f0',
     footerColor: '#888',
-    coverBadge: '🐑🍊 · 考公打卡',
-    footer: '@🐑🍊 · 关注一起上岸',
+    coverBadge: '🐑🍊 · 学行测每日刷题',
+    footer: '学行测 · 公考刷题打卡',
     zipPrefix: '考公抖音配图',
     aspectClass: 'ratio-douyin' as const,
   },
@@ -132,12 +132,11 @@ function createCardElement(
 
   if (isCover) {
     if (platform === 'douyin') {
-      const accent2 = (cfg as typeof PLATFORM_CONFIG.douyin).accent2
       const coverPad = `padding:${COVER_CONTENT_TOP.douyin}px 48px ${DOUYIN_COVER_SAFE.bottom}px`
       el.innerHTML = `
         <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;${coverPad};box-sizing:border-box;">
           ${renderCoverBrandHeader(platform)}
-          <div style="width:120px;height:6px;background:linear-gradient(90deg,${cfg.accent},${accent2});border-radius:3px;margin:20px auto 24px;"></div>
+          <div style="width:120px;height:5px;background:${cfg.accent};border-radius:3px;margin:20px auto 24px;opacity:0.9;"></div>
           <div style="font-size:64px;font-weight:900;line-height:1.2;margin-bottom:16px;letter-spacing:1px;">${options.title}</div>
           <div style="font-size:34px;opacity:0.88;font-weight:500;margin-bottom:32px;">${options.subtitle ?? ''}</div>
           <div style="font-size:26px;opacity:0.9;padding:14px 36px;border:2px solid ${cfg.accent};border-radius:40px;color:${cfg.accent};">
@@ -211,6 +210,71 @@ function buildCoverTitle(questions: Question[], platform: ImagePlatform): string
       ? `${topicLabel}${moduleName}刷题${count}题`
       : `${topicLabel}${moduleName}刷题｜${count}道精选`
   return title.length > maxLen ? title.slice(0, maxLen - 1) + '…' : title
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** 昨日解析图：同卡展示昨日完整题目（题干+选项/图）+ 答案解析，避免与今日题目图混淆 */
+function buildYesterdayQuestionSectionHtml(q: Question, platform: ImagePlatform): string {
+  const cfg = PLATFORM_CONFIG[platform]
+  const panelBg = platform === 'douyin' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'
+  const metaColor = platform === 'douyin' ? '#9aa3b2' : '#888'
+  const topicLine = q.topicName
+    ? `<div style="font-size:22px;color:${metaColor};margin-bottom:8px;">考点：${escapeHtml(q.topicName)}</div>`
+    : ''
+
+  let bodyHtml = stemToHtml(q.stem, { dark: platform === 'douyin' })
+  if (q.tuxing) {
+    bodyHtml += tuxingToHtml(q.tuxing, { figureSize: platform === 'douyin' ? 52 : 56, dark: platform === 'douyin' })
+  } else if (q.options?.length) {
+    const optBg = platform === 'douyin' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'
+    const optsHtml = q.options
+      .map(
+        (o) =>
+          `<div style="margin-top:8px;padding:8px 12px;background:${optBg};border-radius:8px;font-size:22px;line-height:1.45;">${escapeHtml(o.key)}. ${escapeHtml(o.text)}</div>`,
+      )
+      .join('')
+    bodyHtml += `<div style="margin-top:12px;">${optsHtml}</div>`
+  }
+
+  return `
+    <div style="padding:14px 16px;background:${panelBg};border-radius:10px;margin-bottom:18px;line-height:1.55;font-size:24px;">
+      <div style="font-size:26px;color:${cfg.accent};font-weight:600;margin-bottom:10px;">📌 昨日题目</div>
+      ${topicLine}
+      <div>${bodyHtml}</div>
+    </div>
+  `
+}
+
+function buildYesterdayAnswerContentHtml(
+  q: Question,
+  index: number,
+  platform: ImagePlatform,
+): string {
+  const cfg = PLATFORM_CONFIG[platform]
+  const metaColor = platform === 'douyin' ? '#9aa3b2' : '#888'
+
+  const answerBlock = q.options
+    ? `✅ 答案：${escapeHtml(q.answer)}`
+    : `📝 参考答案：${escapeHtml(q.answer)}`
+  const analysisText = formatAnalysisForPublishImage(q.analysis, q.expertStyleLabel)
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br/>')
+
+  return `
+    <div style="font-size:22px;color:${metaColor};line-height:1.5;margin-bottom:14px;">
+      对应<strong style="color:${cfg.accent};">昨日第 ${index + 1} 题</strong>（下图题目与解析一一对应，非今日新题）
+    </div>
+    ${buildYesterdayQuestionSectionHtml(q, platform)}
+    <div style="font-size:26px;line-height:1.65;">
+      <div style="margin-bottom:12px;font-weight:700;">${answerBlock}</div>
+      <div style="font-size:24px;color:${metaColor};margin-bottom:6px;">📖 解析</div>
+      <div style="font-size:24px;">${analysisText}</div>
+    </div>
+  `
 }
 
 /** 配图解析：人名前缀 → 🐑🍊 思路名（仅用于小红书/抖音配图，不影响题目预览） */
@@ -325,15 +389,25 @@ async function renderAnswerCard(
 ): Promise<GeneratedImage> {
   const num = String(index + 1).padStart(2, '0')
   const datePrefix = dateLabel ? `${dateLabel}-` : ''
-  const answerContent = q.options
-    ? `✅ 答案：${q.answer}\n\n📖 解析：\n${formatAnalysisForPublishImage(q.analysis, q.expertStyleLabel)}`
-    : `📝 参考答案：\n${q.answer}\n\n📖 思路：\n${formatAnalysisForPublishImage(q.analysis, q.expertStyleLabel)}`
+  const isYesterday = !!dateLabel
+  const title = dateLabel
+    ? `昨日答案 · ${dateLabel}${q.moduleName ? ` · ${q.moduleName}` : ''}`
+    : '答案与解析'
+  const contentHtml = isYesterday
+    ? buildYesterdayAnswerContentHtml(q, index, platform)
+    : undefined
+  const answerContent = contentHtml
+    ? ''
+    : q.options
+      ? `✅ 答案：${q.answer}\n\n📖 解析：\n${formatAnalysisForPublishImage(q.analysis, q.expertStyleLabel)}`
+      : `📝 参考答案：${q.answer}\n\n📖 思路：\n${formatAnalysisForPublishImage(q.analysis, q.expertStyleLabel)}`
 
   const aBlob = await renderToBlob(
     createCardElement(answerContent, platform, {
-      title: dateLabel ? `昨日答案 · ${dateLabel}` : '答案与解析',
+      title,
       theme: 'answer',
-      index,
+      index: isYesterday ? index : undefined,
+      contentHtml,
     }),
     platform,
   )

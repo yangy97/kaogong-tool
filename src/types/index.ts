@@ -126,6 +126,7 @@ export interface XhsPostContent {
   title: string
   body: string
   todayBody?: string
+  todayQuestionCount?: number
   tags: string[]
   coverHint: string
 }

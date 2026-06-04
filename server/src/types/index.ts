@@ -64,6 +64,8 @@ export interface XhsPostContent {
   body: string
   /** 仅今日题目段落，用于组装复制文案 */
   todayBody?: string
+  /** 今日题目数量，用于昨日配图序号 */
+  todayQuestionCount?: number
   tags: string[]
   coverHint: string
 }

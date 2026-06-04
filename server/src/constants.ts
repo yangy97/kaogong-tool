@@ -198,4 +198,4 @@ export const DOUYIN_CREATOR_URL = 'https://creator.douyin.com/creator-micro/cont
 
 export const DEFAULT_TAGS = ['考公', '公务员考试', '行测', '公考刷题', '上岸']
 
-export const DOUYIN_TAGS = ['考公', '公务员考试', '行测', '公考刷题', '考公上岸', '公务员']
+export const DOUYIN_TAGS = ['考公', '公务员考试', '行测', '公考刷题', '判断推理', '公务员']
