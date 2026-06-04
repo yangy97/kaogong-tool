@@ -13,9 +13,42 @@ export interface ChoiceQuestionLike {
 
 export function buildAnswerDiversityPrompt(count: number): string {
   if (count <= 1) return ''
-  if (count === 2) return '两道题的 answer 必须不同（如一题 A、一题 B），禁止同为 A/B/C/D。'
-  if (count === 3) return '三道题的 answer 须为三个不同选项（如 A、B、C 各一），禁止三题同选。'
-  return `${count} 道题的 answer 须覆盖 A/B/C/D 且尽量分散，至少 3 种不同选项，禁止全部同为某一字母。`
+  const spread =
+    count === 2
+      ? '两题 answer 必须不同（如 A 与 C）'
+      : count === 3
+        ? '三题 answer 须互不相同（如 A、C、D 各一）'
+        : `${count} 题 answer 至少覆盖 3 种不同字母，禁止全部为同一字母`
+  return [
+    spread + '。',
+    '设计题目时直接把各题正确答案放在不同选项位（如第1题 A、第2题 C），不要全部答 D。',
+    '每题 options 正文、analysis 结论「选X」与 answer 字段必须一一对应。',
+  ].join('')
+}
+
+/** 多道四选一是否答案字母过于集中 */
+export function hasDuplicateChoiceAnswers(questions: ChoiceQuestionLike[]): boolean {
+  const keys = questions
+    .filter((q) => q.type === 'single' && q.options?.length === 4)
+    .map((q) => parseAnswerKey(q.answer))
+    .filter((k): k is AnswerKey => k != null)
+  if (keys.length < 2) return false
+  return new Set(keys).size < Math.min(keys.length, countMinSpread(keys.length))
+}
+
+function countMinSpread(n: number): number {
+  if (n <= 1) return 1
+  if (n === 2) return 2
+  if (n === 3) return 3
+  return 3
+}
+
+export function buildAnswerDiversityRetryHint(count: number, beforeKeys: string): string {
+  return [
+    `上次输出不合格：${count} 道单选题的 answer 过于集中（${beforeKeys}）。`,
+    '请重新生成整套题：各题正确答案分别落在不同选项字母上，',
+    '且每题 options、analysis「选X」与 answer 保持一致。',
+  ].join('')
 }
 
 export function parseAnswerKey(answer: string): AnswerKey | null {
@@ -54,12 +87,61 @@ function swapTuxingOptions(tuxing: TuxingData, a: AnswerKey, b: AnswerKey): Tuxi
   return { ...tuxing, options }
 }
 
-function patchAnalysis(analysis: string, from: AnswerKey, to: AnswerKey): string {
-  if (from === to) return analysis
-  return analysis
-    .replace(new RegExp(`选\\s*${from}`, 'gi'), `选${to}`)
-    .replace(new RegExp(`答案[：:]\\s*${from}`, 'gi'), `答案：${to}`)
-    .replace(new RegExp(`选项\\s*${from}`, 'gi'), `选项${to}`)
+/** 分析推理等考点：选项字母与解析强绑定，不做答案分散 */
+const SKIP_DIVERSIFY_TOPIC_IDS = new Set([
+  'panduan-fenxi',
+  'panduan-fanyi',
+  'panduan-zhenjia',
+])
+
+export interface DiversifyContext {
+  topicId?: string
+}
+
+export function shouldDiversifyAnswers(topicId?: string): boolean {
+  if (!topicId) return true
+  return !SKIP_DIVERSIFY_TOPIC_IDS.has(topicId)
+}
+
+const OPT_PLACEHOLDER = '\uE000OPT_'
+
+/** 将解析中所有对选项字母的指称替换为 to（from 可为占位符） */
+function replaceOptionLetterRefs(text: string, from: string, to: string): string {
+  const f = from.toUpperCase()
+  const patterns = [
+    new RegExp(`选\\s*${f}`, 'gi'),
+    new RegExp(`答案[：:]\\s*${f}`, 'gi'),
+    new RegExp(`选项\\s*${f}`, 'gi'),
+    new RegExp(`${f}\\s*项`, 'gi'),
+    new RegExp(`${f}\\s*为`, 'gi'),
+    new RegExp(`${f}\\s*说`, 'gi'),
+    new RegExp(`故\\s*${f}`, 'gi'),
+    new RegExp(`${f}\\s*不符`, 'gi'),
+    new RegExp(`${f}\\s*错`, 'gi'),
+    new RegExp(`${f}(?=[、,，。；\\s]|$)`, 'g'),
+  ]
+  let out = text
+  for (const re of patterns) {
+    out = out.replace(re, (m) => m.replace(new RegExp(f, 'i'), to))
+  }
+  return out
+}
+
+/** 交换解析中对两个选项字母的全部指称（与 swapOptionTexts 对应） */
+function swapAnalysisOptionLetters(analysis: string, a: AnswerKey, b: AnswerKey): string {
+  if (a === b) return analysis
+  const phA = `${OPT_PLACEHOLDER}${a}\uE001`
+  let s = replaceOptionLetterRefs(analysis, a, phA)
+  s = replaceOptionLetterRefs(s, b, a)
+  s = replaceOptionLetterRefs(s, phA, b)
+  return s
+}
+
+/** 统一解析末尾「选X」，与 answer 字段一致 */
+function ensureAnalysisAnswerTag(analysis: string, answer: AnswerKey): string {
+  const body = analysis.replace(/选\s*[A-D][。！？]?$/i, '').replace(/[，。；\s]+$/, '').trim()
+  if (!body) return `选${answer}。`
+  return `${body}，选${answer}。`
 }
 
 function remapAnswerKey<Q extends ChoiceQuestionLike>(
@@ -70,12 +152,13 @@ function remapAnswerKey<Q extends ChoiceQuestionLike>(
   if (from === to) return q
   const options = q.options?.length ? swapOptionTexts(q.options, from, to) : q.options
   const tuxing = q.tuxing ? swapTuxingOptions(q.tuxing, from, to) : q.tuxing
+  const analysis = ensureAnalysisAnswerTag(swapAnalysisOptionLetters(q.analysis, from, to), to)
   return {
     ...q,
     options,
     tuxing,
     answer: to,
-    analysis: patchAnalysis(q.analysis, from, to),
+    analysis,
   }
 }
 
@@ -112,8 +195,28 @@ export function summarizeAnswerKeys(questions: ChoiceQuestionLike[]): string {
 
 export function diversifyChoiceAnswersWithReport<Q extends ChoiceQuestionLike>(
   questions: Q[],
+  context?: DiversifyContext,
 ): { questions: Q[]; report: AnswerDiversifyReport } {
   const before = summarizeAnswerKeys(questions)
+
+  if (context?.topicId && !shouldDiversifyAnswers(context.topicId)) {
+    const choiceQs = questions.filter(
+      (q) => q.type === 'single' && q.options?.length === 4 && parseAnswerKey(q.answer),
+    )
+    const unique = countUniqueAnswers(choiceQs)
+    return {
+      questions,
+      report: {
+        triggered: false,
+        reason: '分析推理/翻译推理/真假推理考点不分散答案，避免选项与解析错位',
+        before,
+        after: before,
+        uniqueBefore: unique,
+        uniqueAfter: unique,
+        changes: [],
+      },
+    }
+  }
   const indices: number[] = []
   questions.forEach((q, i) => {
     if (q.type === 'single' && q.options?.length === 4 && parseAnswerKey(q.answer)) {
@@ -187,6 +290,9 @@ export function diversifyChoiceAnswersWithReport<Q extends ChoiceQuestionLike>(
   }
 }
 
-export function diversifyChoiceAnswers<Q extends ChoiceQuestionLike>(questions: Q[]): Q[] {
-  return diversifyChoiceAnswersWithReport(questions).questions
+export function diversifyChoiceAnswers<Q extends ChoiceQuestionLike>(
+  questions: Q[],
+  context?: DiversifyContext,
+): Q[] {
+  return diversifyChoiceAnswersWithReport(questions, context).questions
 }

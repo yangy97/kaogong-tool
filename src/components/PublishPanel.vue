@@ -54,7 +54,15 @@ async function handleCopyTitle() {
             {{ titleCopied ? '已复制' : '复制标题' }}
           </el-button>
         </div>
-        <div class="body-label">正文预览</div>
+        <div class="body-label-row">
+          <span class="body-label">正文预览</span>
+          <el-text
+            :type="post.body.length > 1000 ? 'warning' : 'info'"
+            size="small"
+          >
+            {{ post.body.length }} / 1000 字
+          </el-text>
+        </div>
         <pre class="body">{{ post.body.slice(0, 300) }}{{ post.body.length > 300 ? '…' : '' }}</pre>
         <div class="tags">
           <el-tag
@@ -182,10 +190,17 @@ async function handleCopyTitle() {
 }
 
 .title-label,
+.body-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
 .body-label {
   font-size: 11px;
   color: var(--el-text-color-secondary);
-  margin-bottom: 4px;
 }
 
 .title {

@@ -35,6 +35,8 @@ export async function initMysql(): Promise<boolean> {
       ...cfg,
       waitForConnections: true,
       connectionLimit: 10,
+      /** 与 Node 进程本地时区一致，读写 DATETIME 不按 UTC 偏移 */
+      timezone: process.env.MYSQL_TIMEZONE || 'local',
     })
 
     const conn = await pool.getConnection()

@@ -60,6 +60,26 @@ export function formatLocalDate(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
+/** MySQL DATETIME 用本地时区，避免 toISOString / NOW() 与北京时间差 8 小时 */
+export function formatLocalDateTime(d: Date = new Date()): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const h = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  const s = String(d.getSeconds()).padStart(2, '0')
+  return `${y}-${m}-${day} ${h}:${min}:${s}`
+}
+
+/** 将 DB 读出的 Date / 字符串格式化为本地 DATETIME 字符串 */
+export function toLocalDateTimeString(value: Date | string): string {
+  if (value instanceof Date) return formatLocalDateTime(value)
+  const s = String(value).trim()
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) return s
+  const d = new Date(s)
+  return Number.isNaN(d.getTime()) ? s : formatLocalDateTime(d)
+}
+
 export function getTodayDateStr(): string {
   return formatLocalDate(new Date())
 }
@@ -77,12 +97,9 @@ function normalizeDate(value: Date | string): string {
   return String(value).slice(0, 10)
 }
 
+/** 返回给前端的存档时间（本地时间字符串，避免 toISOString 少 8 小时） */
 function normalizeSavedAt(value: Date | string): string {
-  if (value instanceof Date) {
-    return value.toISOString()
-  }
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? String(value) : d.toISOString()
+  return toLocalDateTimeString(value)
 }
 
 function parseQuestions(raw: string | Question[]): Question[] {
@@ -144,10 +161,11 @@ export async function saveQuestionSet(
   const postDate = getTodayDateStr()
   const meta = extractMeta(questions, source)
 
+  const savedAtLocal = formatLocalDateTime()
   const [result] = await pool.query<ResultSetHeader>(
     `INSERT INTO question_sets
-      (post_date, module_id, module_name, topic_id, topic_name, question_count, questions, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      (post_date, module_id, module_name, topic_id, topic_name, question_count, questions, source, saved_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       postDate,
       meta.moduleId,
@@ -157,6 +175,7 @@ export async function saveQuestionSet(
       meta.questionCount,
       serializeQuestionsForDb(questions),
       meta.source,
+      savedAtLocal,
     ],
   )
 
@@ -168,12 +187,14 @@ export async function saveQuestionSet(
 /** 兼容次日答案：仍更新 daily_posts（当日最后一次生成作为「正式打卡」） */
 export async function upsertDailyPost(date: string, questions: Question[]): Promise<void> {
   const pool = getPool()
-  const savedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
+  const nowLocal = formatLocalDateTime()
   await pool.query(
-    `INSERT INTO daily_posts (post_date, questions, saved_at)
-     VALUES (?, ?, ?)
-     ON DUPLICATE KEY UPDATE questions = VALUES(questions), saved_at = VALUES(saved_at)`,
-    [date, serializeQuestionsForDb(questions), savedAt],
+    `INSERT INTO daily_posts (post_date, questions, saved_at, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       questions = VALUES(questions),
+       updated_at = ?`,
+    [date, serializeQuestionsForDb(questions), nowLocal, nowLocal, nowLocal],
   )
 }
 

@@ -12,9 +12,13 @@ const MODULE_SYSTEM_EXTRAS: Record<string, string> = {
 }
 
 /** 系统 prompt：稳定内容放这里，便于 DeepSeek 前缀缓存命中 */
+const BATCH_ANSWER_RULE =
+  '一次输出多道四选一单选题时：各题 answer 字母须分散（禁止全部相同），设计题目时直接把各题正确答案落在不同选项位（如 A、C、D），options、analysis 与 answer 字段保持一致。'
+
 export function buildModuleSystemPrompt(module: ExamModule, expert?: ExamExpert): string {
   const parts = [
     `你是公考${module.name}命题专家。${MODULE_SYSTEM_EXTRAS[module.id] ?? ''}`,
+    BATCH_ANSWER_RULE,
     ANALYSIS_PROMPT_RULES,
     getModuleBaseHints(module.id),
   ]

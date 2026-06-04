@@ -28,9 +28,15 @@ const emptyText = computed(() =>
   loading.value && !items.value.length ? '加载中…' : '暂无历史记录，生成题目后会自动保存在这里',
 )
 
-function formatTime(iso: string) {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
+function formatTime(raw: string) {
+  const s = raw.trim()
+  // 服务端返回的本地时间：2026-06-04 10:04:31
+  const localMatch = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(s)
+  if (localMatch) {
+    return `${localMatch[2]}/${localMatch[3]} ${localMatch[4]}:${localMatch[5]}`
+  }
+  const d = new Date(s)
+  if (Number.isNaN(d.getTime())) return s
   return d.toLocaleString('zh-CN', {
     month: '2-digit',
     day: '2-digit',

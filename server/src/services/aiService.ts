@@ -9,9 +9,14 @@ import { normalizeStemTables } from '../utils/stemFormat'
 import { compactAnalysis } from '../utils/analysisNormalize'
 import { normalizeTuxingFromAi } from '../utils/tuxingNormalize'
 import { isGridTuxing, syncTuxingAnalysis } from '../utils/tuxingAnalysisSync'
-import { diversifyChoiceAnswersWithReport } from '../utils/answerDiversify'
+import {
+  buildAnswerDiversityRetryHint,
+  hasDuplicateChoiceAnswers,
+  summarizeAnswerKeys,
+} from '../utils/answerDiversify'
 import { isTuxingTopicId } from '../types/tuxing'
 import { devGroup, devLog, preview } from '../utils/devLog'
+import { parseAiJsonArray } from '../utils/parseAiJson'
 
 export { getAiConfig, SUPPORTED_AI_MODELS } from '../config/aiConfig'
 export type { AiModelOption, AiRuntimeConfig } from '../config/aiConfig'
@@ -27,9 +32,7 @@ interface AiQuestionRaw {
 }
 
 function parseAiResponse(text: string, expertPrefix?: string, isTuxing = false): AiQuestionRaw[] {
-  const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-  const parsed = JSON.parse(cleaned)
-  if (!Array.isArray(parsed)) throw new Error('AI 返回格式不是数组')
+  const parsed = parseAiJsonArray(text, 1) as AiQuestionRaw[]
   return parsed.map((q, i) => {
     const tuxing = isTuxing ? normalizeTuxingFromAi(q.tuxing) : undefined
     if (isTuxing && !tuxing) {
@@ -94,6 +97,26 @@ async function readStreamingCompletion(
   }
   signal?.addEventListener('abort', cancelReader, { once: true })
 
+  const consumeSseLine = (line: string) => {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('data:')) return
+    const payload = trimmed.slice(5).trim()
+    if (!payload || payload === '[DONE]') return
+
+    try {
+      const parsed = JSON.parse(payload) as {
+        choices?: Array<{ delta?: { content?: string; reasoning_content?: string } }>
+        usage?: typeof usage
+      }
+      const delta = parsed.choices?.[0]?.delta
+      // 只取最终 content，忽略 reasoning_content（思考链）
+      content += delta?.content ?? ''
+      if (parsed.usage) usage = parsed.usage
+    } catch {
+      /* 跳过不完整 SSE 行 */
+    }
+  }
+
   try {
     while (true) {
       if (signal?.aborted) {
@@ -104,32 +127,16 @@ async function readStreamingCompletion(
       }
 
       const { done, value } = await reader.read()
+      if (value) buffer += decoder.decode(value, { stream: !done })
       if (done) break
 
-      buffer += decoder.decode(value, { stream: true })
       const lines = buffer.split('\n')
       buffer = lines.pop() ?? ''
-
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data:')) continue
-        const payload = trimmed.slice(5).trim()
-        if (!payload || payload === '[DONE]') continue
-
-        try {
-          const parsed = JSON.parse(payload) as {
-            choices?: Array<{ delta?: { content?: string; reasoning_content?: string } }>
-            usage?: typeof usage
-          }
-          const delta = parsed.choices?.[0]?.delta
-          // 只取最终 content，忽略 reasoning_content（思考链）
-          content += delta?.content ?? ''
-          if (parsed.usage) usage = parsed.usage
-        } catch {
-          /* 跳过不完整 SSE 行 */
-        }
-      }
+      for (const line of lines) consumeSseLine(line)
     }
+
+    // 处理流结束时 buffer 中残留的最后一行（此前会直接丢弃，导致 JSON 截断）
+    if (buffer.trim()) consumeSseLine(buffer)
   } finally {
     signal?.removeEventListener('abort', cancelReader)
   }
@@ -161,7 +168,9 @@ export async function generateViaAi(
   const systemPrompt = buildModuleSystemPrompt(module, expert)
   const userPrompt = buildAiPrompt(module, count, difficulty, topic, expert)
   const temperature = getAiTemperature(module.id, difficulty as Difficulty)
-  const maxTokens = Math.min(4096, count * 450 + 256)
+  const isTuxing = isTuxingTopicId(topic?.id)
+  const perQuestion = isTuxing ? 1100 : module.id === 'shenlun' ? 750 : 550
+  const maxTokens = Math.min(8192, count * perQuestion + 384)
   const started = Date.now()
   devGroup(`AI 出题 · ${module.name} · ${providerId}`, () => {
     devLog('AI', 'provider:', providerId)
@@ -173,86 +182,72 @@ export async function generateViaAi(
     devLog('AI', 'promptChars:', { system: systemPrompt.length, user: userPrompt.length })
   })
 
-  const body: Record<string, unknown> = {
-    model,
-    temperature,
-    max_tokens: maxTokens,
-    stream: true,
-    stream_options: { include_usage: true },
-    messages: [
-      {
-        role: 'system',
-        content: systemPrompt,
+  const requestCompletion = async (userContent: string) => {
+    const body: Record<string, unknown> = {
+      model,
+      temperature,
+      max_tokens: maxTokens,
+      stream: true,
+      stream_options: { include_usage: true },
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
+      ],
+    }
+    if (isDeepSeekApi(baseUrl)) {
+      body.thinking = { type: 'disabled' }
+    }
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
       },
-      { role: 'user', content: userPrompt },
-    ],
+      signal,
+      body: JSON.stringify(body),
+    })
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '')
+      throw new Error(`AI API 错误: ${response.status}${errText ? ` — ${errText.slice(0, 200)}` : ''}`)
+    }
+    try {
+      return await readStreamingCompletion(response, signal)
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        devLog('AI', '流式请求已取消（连接断开，DeepSeek 可尽早停止生成）')
+      }
+      throw e
+    }
   }
 
-  // DeepSeek V4 默认开启思考模式，需显式关闭，避免思考链混入解析
-  if (isDeepSeekApi(baseUrl)) {
-    body.thinking = { type: 'disabled' }
-  }
-
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    signal,
-    body: JSON.stringify(body),
-  })
-
-  if (!response.ok) {
-    const errText = await response.text().catch(() => '')
-    throw new Error(`AI API 错误: ${response.status}${errText ? ` — ${errText.slice(0, 200)}` : ''}`)
-  }
-
-  let content: string
+  let userContent = userPrompt
+  let content = ''
   let usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined
+  let rawParsed: ReturnType<typeof parseAiResponse> = []
 
-  try {
-    const streamed = await readStreamingCompletion(response, signal)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const streamed = await requestCompletion(userContent)
     content = streamed.content
     usage = streamed.usage
-  } catch (e) {
-    if (e instanceof Error && e.name === 'AbortError') {
-      devLog('AI', '流式请求已取消（连接断开，DeepSeek 可尽早停止生成）')
+    if (!content) throw new Error('AI 返回内容为空')
+
+    devGroup(`AI 响应 · ${Date.now() - started}ms · 第${attempt + 1}次`, () => {
+      if (usage) devLog('AI', 'tokens:', usage)
+      devLog('AI', 'rawPreview:', preview(content, 200))
+    })
+
+    rawParsed = parseAiResponse(content, expert?.analysisPrefix, isTuxingTopicId(topic?.id))
+
+    if (attempt === 0 && count > 1 && hasDuplicateChoiceAnswers(rawParsed)) {
+      const keys = summarizeAnswerKeys(rawParsed)
+      devLog('AI', '答案字母过于集中，重试一次:', keys)
+      userContent = `${userPrompt}\n\n${buildAnswerDiversityRetryHint(count, keys)}`
+      continue
     }
-    throw e
+    break
   }
 
-  if (!content) throw new Error('AI 返回内容为空')
-
-  devGroup(`AI 响应 · ${Date.now() - started}ms`, () => {
-    if (usage) {
-      devLog('AI', 'tokens:', usage)
-      const ratio = usage.prompt_tokens && usage.completion_tokens
-        ? (usage.prompt_tokens / usage.completion_tokens).toFixed(1)
-        : '-'
-      devLog('AI', 'input/output ratio:', ratio)
-    }
-    devLog('AI', 'rawPreview:', preview(content, 200))
-  })
-
-  const rawParsed = parseAiResponse(content, expert?.analysisPrefix, isTuxingTopicId(topic?.id))
-  const { questions: diversified, report: diversifyReport } =
-    diversifyChoiceAnswersWithReport(rawParsed)
-  devGroup('答案分散', () => {
-    devLog('diversify', diversifyReport.reason)
-    devLog('diversify', '分散前:', diversifyReport.before)
-    devLog('diversify', '分散后:', diversifyReport.after)
-    if (diversifyReport.triggered) {
-      devLog(
-        'diversify',
-        '变更:',
-        diversifyReport.changes.map((c) => `第${c.questionIndex}题 ${c.from}→${c.to}`).join(', ') ||
-          '（目标已与当前相同，未改）',
-      )
-      devLog('diversify', '选项/解析/图形已同步交换，入库为分散后版本')
-    }
-  })
-  const raw = diversified.map((q) => {
+  const raw = rawParsed.map((q) => {
     if (q.tuxing && isGridTuxing(q.tuxing)) {
       return {
         ...q,

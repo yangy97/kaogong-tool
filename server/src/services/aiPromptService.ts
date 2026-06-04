@@ -33,7 +33,7 @@ export function buildAiPrompt(
     isTuxing ? buildTuxingPromptIfNeeded(topic?.id) : '',
     !isEssay && count > 1 ? buildAnswerDiversityPrompt(count) : '',
     module.id === 'ziliao' ? '资料 stem：表格与设问分行，设问禁止写在表格最后一格或额外列。' : '',
-    '只输出 JSON 数组，无 markdown、无解释。stem 表格用 \\n 换行。',
+    '只输出 JSON 数组，无 markdown、无解释。stem 表格用 \\n 换行；字符串内双引号须写成 \\"，禁止未转义换行。',
     `格式：${jsonExample}`,
   ]
 

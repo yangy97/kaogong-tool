@@ -1,12 +1,6 @@
 import type { Question, XhsPostContent } from '../types/index'
 import { DEFAULT_TAGS, DOUYIN_TAGS } from '../constants'
 
-const DIFFICULTY_EMOJI: Record<string, string> = {
-  easy: '🟢',
-  medium: '🟡',
-  hard: '🔴',
-}
-
 export interface PreviousDayPost {
   date: string
   questions: Question[]
@@ -14,7 +8,7 @@ export interface PreviousDayPost {
 
 export interface BuildPostOptions {
   previousDay?: PreviousDayPost
-  /** 历史题目完整发布：文案含答案与解析（默认 false，与每日刷题一致） */
+  /** 历史题目完整发布：文案含题干与答案（解析仅在配图，默认 false） */
   includeAnswers?: boolean
   /** 打卡天数序号，用于标题 DAY{n} */
   dayNumber?: number
@@ -26,46 +20,60 @@ export function buildDailyTitle(questions: Question[], dayNumber: number): strin
   return `考公每日一练之${subject}刷题DAY${dayNumber}`
 }
 
+/** 仅压缩 AI 题干里多余空白/换行，不影响引导语与选项排版 */
+function compactStem(stem: string): string {
+  return stem
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
+/** 段落之间只保留单行换行，避免复制后出现多余空行 */
+function joinBlocks(blocks: string[]): string {
+  return blocks
+    .map((b) => b.trim())
+    .filter(Boolean)
+    .join('\n')
+}
+
 function formatQuestionBlock(q: Question, index: number): string {
-  const diff = DIFFICULTY_EMOJI[q.difficulty] ?? ''
-  let block = `\n${index + 1}. ${q.stem}\n`
+  let block = `${index + 1}. ${compactStem(q.stem)}`
 
   if (q.options?.length) {
-    block += q.options.map((o) => `   ${o.key}. ${o.text}`).join('\n') + '\n'
+    block += '\n' + q.options.map((o) => `   ${o.key}. ${o.text}`).join('\n')
   } else {
-    block += `\n📝 （主观题，请自行作答）\n`
+    block += '\n📝 （主观题，请自行作答）'
   }
 
-  block += `${diff} 难度：${q.difficulty === 'easy' ? '简单' : q.difficulty === 'hard' ? '困难' : '中等'}\n`
   return block
 }
 
 function formatQuestionWithAnswerBlock(q: Question, index: number): string {
   let block = formatQuestionBlock(q, index)
   if (q.options?.length) {
-    block += `\n💡 答案：${q.answer}\n📖 解析：${q.analysis}\n`
+    block += `\n💡 答案：${q.answer}（解析见配图）`
   } else {
-    block += `\n📝 参考要点：${q.answer}\n📖 思路：${q.analysis}\n`
+    block += `\n📝 参考要点：${q.answer}（思路见配图）`
   }
   return block
 }
 
+/** 昨日揭晓：正文只写答案，解析在配图里，控制小红书/抖音 1000 字上限 */
 function formatAnswerBlock(q: Question, index: number): string {
-  let block = `\n${index + 1}. `
   if (q.options?.length) {
-    block += `✅ 答案：${q.answer}\n📖 解析：${q.analysis}\n`
-  } else {
-    block += `📝 参考要点：${q.answer}\n📖 思路：${q.analysis}\n`
+    return `${index + 1}. ✅ 答案：${q.answer}`
   }
-  return block
+  return `${index + 1}. 📝 参考要点：${q.answer}`
 }
 
 export function formatPreviousDaySection(previousDay: PreviousDayPost): string {
   const count = previousDay.questions.length
   const moduleName = previousDay.questions[0]?.moduleName ?? '考公'
-  const header = `🎯 昨日（${previousDay.date}）${moduleName} ${count}题 · 答案揭晓`
-  const body = previousDay.questions.map((q, i) => formatAnswerBlock(q, i)).join('')
-  return header + body
+  const header = `🎯 昨日（${previousDay.date}）${moduleName} ${count}题 · 答案揭晓\n📖 详细解析见配图`
+  const body = previousDay.questions.map((q, i) => formatAnswerBlock(q, i)).join('\n')
+  return joinBlocks([header, body])
 }
 
 function collectExpertTags(questions: Question[]): string[] {
@@ -93,8 +101,8 @@ function buildPostBase(
 
   const intro =
     platform === 'xhs'
-      ? `📚 今日${moduleName}专项练习来啦！\n坚持刷题，离上岸更近一步 💪\n`
-      : `🔥 今日${moduleName}专项刷题！\n先做题，答案明天见～\n`
+      ? `📚 今日${moduleName}专项练习来啦！\n坚持刷题，离上岸更近一步 💪`
+      : `🔥 今日${moduleName}专项刷题！\n先做题，答案明天见～`
 
   const includeAnswers = options?.includeAnswers === true
   const bodyParts = questions.map((q, i) =>
@@ -103,20 +111,20 @@ function buildPostBase(
 
   const outro = includeAnswers
     ? platform === 'xhs'
-      ? '\n---\n✅ 答案解析见上方\n💬 欢迎在评论区交流做题思路\n🔖 收藏起来慢慢做！\n'
-      : '\n---\n✅ 答案解析见上方\n👇 评论区说说你做对了几个\n'
+      ? '---\n✅ 答案与解析见配图 💬 欢迎在评论区交流做题思路 🔖 收藏起来慢慢做！'
+      : '---\n✅ 答案与解析见配图 👇 评论区说说你做对了几个'
     : platform === 'xhs'
-      ? '\n---\n⏳ 今日答案明日揭晓，先做题吧！\n💬 欢迎在评论区交流做题思路\n🔖 收藏起来慢慢做！\n'
-      : '\n---\n⏳ 今日答案明天公布\n👇 评论区说说你做对了几个\n'
+      ? '---\n⏳ 今日答案明日揭晓，先做题吧！ 💬 欢迎在评论区交流做题思路 🔖 收藏起来慢慢做！'
+      : '---\n⏳ 今日答案明天公布 👇 评论区说说你做对了几个'
 
-  const todayBody = intro + bodyParts.join('\n') + outro
+  const todayBody = joinBlocks([intro, ...bodyParts, outro])
 
-  const previousSection =
-    !includeAnswers && options?.previousDay?.questions.length
-      ? `${formatPreviousDaySection(options.previousDay)}\n\n---\n\n`
-      : ''
-
-  const body = previousSection + todayBody
+  const bodyBlocks: string[] = []
+  if (!includeAnswers && options?.previousDay?.questions.length) {
+    bodyBlocks.push(formatPreviousDaySection(options.previousDay), '---')
+  }
+  bodyBlocks.push(todayBody)
+  const body = joinBlocks(bodyBlocks)
 
   const expertTags = collectExpertTags([
     ...questions,
@@ -140,15 +148,16 @@ export function buildXhsPost(questions: Question[], options?: BuildPostOptions):
   return buildPostBase(questions, options, 'xhs')
 }
 
+/** 复制用正文：不含话题标签（平台发布时自行填写） */
 export function formatCopyText(post: XhsPostContent, options?: BuildPostOptions): string {
-  const tagLine = post.tags.map((t) => `#${t}`).join(' ')
   const includeAnswers = options?.includeAnswers === true
   const todayBody = post.todayBody ?? post.body
-  const previousHead =
-    !includeAnswers && options?.previousDay?.questions.length
-      ? `${formatPreviousDaySection(options.previousDay!)}\n\n---\n\n`
-      : ''
-  return `${previousHead}${post.title}\n\n${todayBody}\n\n${tagLine}`
+  const blocks: string[] = []
+  if (!includeAnswers && options?.previousDay?.questions.length) {
+    blocks.push(formatPreviousDaySection(options.previousDay!), '---')
+  }
+  blocks.push(post.title, todayBody)
+  return joinBlocks(blocks)
 }
 
 export function buildDouyinPost(questions: Question[], options?: BuildPostOptions): XhsPostContent {
