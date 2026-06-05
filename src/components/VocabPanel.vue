@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SelectOption } from '@/types/form'
-import type { VocabCategory, VocabItem, VocabWebLookupResult } from '@/types'
+import type {
+  VocabCategory,
+  VocabItem,
+  VocabSentimentTone,
+  VocabWebLookupResult,
+} from '@/types'
 
 const props = defineProps<{
   categories: VocabCategory[]
@@ -49,6 +54,36 @@ function onSearch() {
 
 function onWebSearch() {
   emit('webSearch', keyword.value)
+}
+
+const SENTIMENT_CLASS: Record<VocabSentimentTone, string> = {
+  褒义: 'sentiment-positive',
+  偏褒义: 'sentiment-mild-positive',
+  贬义: 'sentiment-negative',
+  偏贬义: 'sentiment-mild-negative',
+  中性: 'sentiment-neutral',
+  可褒可贬: 'sentiment-mixed',
+}
+
+function sentimentClass(tone: VocabSentimentTone): string {
+  return SENTIMENT_CLASS[tone] ?? 'sentiment-neutral'
+}
+
+const SENTIMENT_USAGE_RULES: Array<{ pattern: RegExp; tone: VocabSentimentTone }> = [
+  { pattern: /可褒可贬/, tone: '可褒可贬' },
+  { pattern: /偏褒/, tone: '偏褒义' },
+  { pattern: /偏贬|多含贬/, tone: '偏贬义' },
+  { pattern: /含褒|褒义/, tone: '褒义' },
+  { pattern: /含贬|贬义/, tone: '贬义' },
+  { pattern: /^中性$/, tone: '中性' },
+]
+
+function parseUsageSentiment(usage?: string): VocabSentimentTone | null {
+  if (!usage) return null
+  for (const rule of SENTIMENT_USAGE_RULES) {
+    if (rule.pattern.test(usage)) return rule.tone
+  }
+  return null
 }
 </script>
 
@@ -150,6 +185,13 @@ function onWebSearch() {
       <p v-if="webLookup.web" class="web-meaning">
         <strong>{{ webLookup.web.word }}</strong>
         <span v-if="webLookup.web.pinyin" class="web-pinyin">（{{ webLookup.web.pinyin }}）</span>
+        <span
+          v-if="webLookup.web.sentiment"
+          class="sentiment-tag"
+          :class="sentimentClass(webLookup.web.sentiment.tone)"
+        >
+          {{ webLookup.web.sentiment.tone }}
+        </span>
         ：{{ webLookup.web.meaning }}
         <el-button
           v-if="webLookup.web.sourceUrl"
@@ -161,6 +203,41 @@ function onWebSearch() {
           查看原文
         </el-button>
       </p>
+      <p v-if="webLookup.web?.sentiment" class="web-sentiment-note">
+        <span class="web-sentiment-label">感情色彩</span>
+        {{ webLookup.web.sentiment.note }}
+        <span class="web-sentiment-src">
+          （{{ webLookup.web.sentiment.source === 'library' ? '700 词库' : webLookup.web.sentiment.source === 'meaning' ? '释义标注' : '语义推断' }}）
+        </span>
+      </p>
+      <div
+        v-if="webLookup.web?.synonyms?.length || webLookup.web?.antonyms?.length"
+        class="web-related-block"
+      >
+        <p v-if="webLookup.web?.synonyms?.length" class="web-related">
+          <span class="web-related-label syn">近义词</span>
+          <span
+            v-for="item in webLookup.web.synonyms"
+            :key="`syn-${item.word}`"
+            class="related-item"
+          >
+            <strong>{{ item.word }}</strong>
+            <span v-if="item.meaning" class="related-meaning">（{{ item.meaning }}）</span>
+          </span>
+        </p>
+        <p v-if="webLookup.web?.antonyms?.length" class="web-related">
+          <span class="web-related-label ant">反义词</span>
+          <span
+            v-for="item in webLookup.web.antonyms"
+            :key="`ant-${item.word}`"
+            class="related-item"
+          >
+            <strong>{{ item.word }}</strong>
+            <span v-if="item.meaning" class="related-meaning">（{{ item.meaning }}）</span>
+          </span>
+        </p>
+        <p class="web-related-source">近反义词条来源：汉典</p>
+      </div>
       <p v-else class="web-meaning muted">未拉到在线释义，可点击下方链接在浏览器中查看</p>
       <p v-if="webLookup.local.length" class="web-local-hint">
         库内匹配 {{ webLookup.local.length }} 条（见下方列表）
@@ -183,6 +260,13 @@ function onWebSearch() {
         <header class="vocab-card-head">
           <strong class="word">{{ item.word }}</strong>
           <span class="type">{{ item.type }}</span>
+          <span
+            v-if="parseUsageSentiment(item.usage)"
+            class="sentiment-tag sentiment-tag--sm"
+            :class="sentimentClass(parseUsageSentiment(item.usage)!)"
+          >
+            {{ parseUsageSentiment(item.usage) }}
+          </span>
         </header>
         <p class="meaning">{{ item.meaning }}</p>
         <p v-if="item.example" class="extra">例：{{ item.example }}</p>
@@ -340,6 +424,125 @@ function onWebSearch() {
 }
 
 .web-meaning.muted {
+  color: var(--text-secondary);
+}
+
+.sentiment-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  vertical-align: middle;
+}
+
+.sentiment-tag--sm {
+  margin-left: 0;
+  font-size: 10px;
+  padding: 1px 6px;
+}
+
+.sentiment-positive {
+  background: var(--el-color-success-light-9);
+  color: var(--el-color-success);
+}
+
+.sentiment-mild-positive {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.sentiment-negative {
+  background: var(--el-color-danger-light-9);
+  color: var(--el-color-danger);
+}
+
+.sentiment-mild-negative {
+  background: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
+}
+
+.sentiment-neutral {
+  background: var(--el-fill-color-light);
+  color: var(--text-secondary);
+}
+
+.sentiment-mixed {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.web-sentiment-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.web-sentiment-label {
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+}
+
+.web-sentiment-src {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.web-related-block {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--ui-border, #eee);
+}
+
+.web-related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: baseline;
+  font-size: 13px;
+  line-height: 1.6;
+  margin-top: 6px;
+}
+
+.web-related-label {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.web-related-label.syn {
+  background: var(--el-color-success-light-9);
+  color: var(--el-color-success);
+}
+
+.web-related-label.ant {
+  background: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
+}
+
+.related-item strong {
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+.related-meaning {
+  color: var(--text-secondary);
+}
+
+.web-related-source {
+  margin-top: 6px;
+  font-size: 11px;
   color: var(--text-secondary);
 }
 

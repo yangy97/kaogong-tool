@@ -67,12 +67,34 @@ export interface VocabWebLink {
 
 export type VocabWebSource = 'youdao' | 'iciba' | 'local'
 
+export interface VocabRelatedWord {
+  word: string
+  meaning?: string
+}
+
+export type VocabSentimentTone =
+  | '褒义'
+  | '偏褒义'
+  | '贬义'
+  | '偏贬义'
+  | '中性'
+  | '可褒可贬'
+
+export interface VocabSentiment {
+  tone: VocabSentimentTone
+  note: string
+  source: 'library' | 'meaning' | 'inferred'
+}
+
 export interface VocabWebSnippet {
   word: string
   meaning: string
   pinyin?: string
   source: VocabWebSource
   sourceUrl: string
+  synonyms?: VocabRelatedWord[]
+  antonyms?: VocabRelatedWord[]
+  sentiment?: VocabSentiment
 }
 
 export interface VocabWebLookupResult {

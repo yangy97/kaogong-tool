@@ -434,7 +434,11 @@ async function handleVocabWebSearch(keyword: string) {
       vocabFilteredTotal.value = result.local.length
     }
     if (result.web) {
-      showToast(`已查到「${result.web.word}」在线释义`)
+      const syn = result.web.synonyms?.length ?? 0
+      const ant = result.web.antonyms?.length ?? 0
+      const relatedHint = syn || ant ? `，含近义 ${syn} 条、反义 ${ant} 条` : ''
+      const sentimentHint = result.web.sentiment ? `，${result.web.sentiment.tone}` : ''
+      showToast(`已查到「${result.web.word}」在线释义${sentimentHint}${relatedHint}`)
     } else if (result.local.length) {
       showToast(`库内找到 ${result.local.length} 条，在线释义未返回`)
     } else {
