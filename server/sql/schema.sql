@@ -9,16 +9,35 @@ CREATE DATABASE IF NOT EXISTS `kaogong_tool`
 USE `kaogong_tool`;
 
 -- ---------------------------------------------------------------------------
--- daily_posts：每日正式打卡（同一天 UPSERT，供「昨日答案揭晓」）
+-- daily_posts：每日正式打卡（仅用户点击发布时写入，供「昨日答案揭晓」）
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `daily_posts` (
   `post_date` DATE NOT NULL COMMENT '打卡日期 YYYY-MM-DD',
   `questions` JSON NOT NULL COMMENT '当日完整题目 JSON（含 options/answer/analysis/tuxing）',
+  `question_set_id` BIGINT UNSIGNED DEFAULT NULL COMMENT '最近发布关联 question_sets.id',
+  `xhs_question_set_id` BIGINT UNSIGNED DEFAULT NULL COMMENT '小红书正式打卡 question_sets.id',
+  `douyin_question_set_id` BIGINT UNSIGNED DEFAULT NULL COMMENT '抖音正式打卡 question_sets.id',
   `saved_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次写入时间',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后一次覆盖时间',
   PRIMARY KEY (`post_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='每日打卡：同一天多次生成会覆盖为最后一次';
+  COMMENT='每日打卡：仅发布时写入，分平台记录正式题目套号';
+
+-- ---------------------------------------------------------------------------
+-- publish_logs：每次点击「一键发布」记一条
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `publish_logs` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增主键',
+  `question_set_id` BIGINT UNSIGNED NOT NULL COMMENT '发布的题目套 question_sets.id',
+  `platform` ENUM('xhs', 'douyin') NOT NULL COMMENT '发布平台',
+  `post_date` DATE NOT NULL COMMENT '题目所属日期',
+  `published_at` DATETIME NOT NULL COMMENT '点击发布时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_set_platform` (`question_set_id`, `platform`),
+  INDEX `idx_post_date` (`post_date`),
+  INDEX `idx_published_at` (`published_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='发布点击日志：统计次数、追溯哪套题发到哪个平台';
 
 -- ---------------------------------------------------------------------------
 -- question_sets：每次生成 INSERT 一条，历史列表不互相覆盖
@@ -34,6 +53,10 @@ CREATE TABLE IF NOT EXISTS `question_sets` (
   `questions` JSON NOT NULL COMMENT '完整题目 JSON 数组',
   `source` ENUM('ai', 'vocab') NOT NULL DEFAULT 'ai' COMMENT '来源：AI 出题 / 词汇题',
   `saved_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '存档时间',
+  `published_xhs_at` DATETIME DEFAULT NULL COMMENT '最近发布到小红书时间',
+  `published_douyin_at` DATETIME DEFAULT NULL COMMENT '最近发布到抖音时间',
+  `xhs_publish_count` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '小红书发布点击次数',
+  `douyin_publish_count` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '抖音发布点击次数',
   PRIMARY KEY (`id`),
   INDEX `idx_post_date` (`post_date`),
   INDEX `idx_saved_at` (`saved_at`)

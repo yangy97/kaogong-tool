@@ -162,6 +162,22 @@ export const api = {
       method: 'POST',
     }),
 
+  recordPublish: (questionSetId: number, platform: 'xhs' | 'douyin') =>
+    request<{
+      ok: boolean
+      questionSetId: number
+      postDate: string
+      platform: 'xhs' | 'douyin'
+      publishCount: number
+      publishedXhsAt: string | null
+      publishedDouyinAt: string | null
+      xhsPublishCount: number
+      douyinPublishCount: number
+    }>('/xhs/publish', {
+      method: 'POST',
+      body: JSON.stringify({ questionSetId, platform }),
+    }),
+
   health: () =>
     request<{
       ok: boolean

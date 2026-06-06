@@ -6,8 +6,12 @@ import { copyToClipboard } from '@/utils/xhsCard'
 const props = defineProps<{
   post: XhsPostContent | null
   publishing: boolean
-  previousDayDate?: string | null
-  previousDayCount?: number
+  previousDayDateXhs?: string | null
+  previousDayCountXhs?: number
+  previousDaySetIdXhs?: number | null
+  previousDayDateDouyin?: string | null
+  previousDayCountDouyin?: number
+  previousDaySetIdDouyin?: number | null
   xhsImageCount?: number
   douyinImageCount?: number
 }>()
@@ -119,20 +123,29 @@ async function handleCopyTitle() {
     </el-card>
 
     <el-alert
-      v-if="previousDayCount"
+      v-if="previousDayCountXhs || previousDayCountDouyin"
       type="success"
       :closable="false"
       show-icon
-      :title="`文案：昨日为关键词+答案速查（原题见解析图）；今日小红书含完整题干，抖音题干见配图。`"
       class="tip-alert"
-    />
+    >
+      <template #title>
+        <span v-if="previousDayCountXhs">
+          小红书昨日：{{ previousDayDateXhs }} · #{{ previousDaySetIdXhs ?? '?' }} · {{ previousDayCountXhs }} 题
+        </span>
+        <span v-if="previousDayCountXhs && previousDayCountDouyin">；</span>
+        <span v-if="previousDayCountDouyin">
+          抖音昨日：{{ previousDayDateDouyin }} · #{{ previousDaySetIdDouyin ?? '?' }} · {{ previousDayCountDouyin }} 题
+        </span>
+      </template>
+    </el-alert>
 
     <el-alert
       v-else
       type="warning"
       :closable="false"
       show-icon
-      title="今日题目不含答案（明日揭晓）。首次发布无昨日答案段；从第二天起会自动附带前一日答案。"
+      title="今日题目不含答案（明日揭晓）。昨日答案来自前一日各平台已发布的题目套号；仅生成未发布不会计入。"
       class="tip-alert"
     />
 

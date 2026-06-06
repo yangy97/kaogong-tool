@@ -44,8 +44,23 @@ export async function initMysql(): Promise<boolean> {
       CREATE TABLE IF NOT EXISTS daily_posts (
         post_date DATE NOT NULL PRIMARY KEY,
         questions JSON NOT NULL,
+        question_set_id BIGINT UNSIGNED DEFAULT NULL,
+        xhs_question_set_id BIGINT UNSIGNED DEFAULT NULL,
+        douyin_question_set_id BIGINT UNSIGNED DEFAULT NULL,
         saved_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `)
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS publish_logs (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        question_set_id BIGINT UNSIGNED NOT NULL,
+        platform ENUM('xhs', 'douyin') NOT NULL,
+        post_date DATE NOT NULL,
+        published_at DATETIME NOT NULL,
+        INDEX idx_set_platform (question_set_id, platform),
+        INDEX idx_post_date (post_date),
+        INDEX idx_published_at (published_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `)
     await conn.query(`
@@ -60,10 +75,31 @@ export async function initMysql(): Promise<boolean> {
         questions JSON NOT NULL,
         source ENUM('ai', 'vocab') NOT NULL DEFAULT 'ai',
         saved_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        published_xhs_at DATETIME DEFAULT NULL,
+        published_douyin_at DATETIME DEFAULT NULL,
+        xhs_publish_count INT UNSIGNED NOT NULL DEFAULT 0,
+        douyin_publish_count INT UNSIGNED NOT NULL DEFAULT 0,
         INDEX idx_post_date (post_date),
         INDEX idx_saved_at (saved_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `)
+    const migrations = [
+      'ALTER TABLE daily_posts ADD COLUMN question_set_id BIGINT UNSIGNED DEFAULT NULL',
+      'ALTER TABLE daily_posts ADD COLUMN xhs_question_set_id BIGINT UNSIGNED DEFAULT NULL',
+      'ALTER TABLE daily_posts ADD COLUMN douyin_question_set_id BIGINT UNSIGNED DEFAULT NULL',
+      'ALTER TABLE question_sets ADD COLUMN published_xhs_at DATETIME DEFAULT NULL',
+      'ALTER TABLE question_sets ADD COLUMN published_douyin_at DATETIME DEFAULT NULL',
+      'ALTER TABLE question_sets ADD COLUMN xhs_publish_count INT UNSIGNED NOT NULL DEFAULT 0',
+      'ALTER TABLE question_sets ADD COLUMN douyin_publish_count INT UNSIGNED NOT NULL DEFAULT 0',
+    ]
+    for (const sql of migrations) {
+      try {
+        await conn.query(sql)
+      } catch (err) {
+        const code = (err as { code?: string }).code
+        if (code !== 'ER_DUP_FIELDNAME') throw err
+      }
+    }
     conn.release()
 
     ready = true

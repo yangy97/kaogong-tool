@@ -10,18 +10,39 @@ import {
   type BuildPostOptions,
 } from '../services/xhsService'
 import {
+  getDayBefore,
   getDayNumberForDate,
-  getPostByDate,
+  getPostByDateForPlatform,
   getQuestionSetById,
   getTodayDateStr,
-  getYesterdayDateStr,
   listQuestionSets,
+  recordQuestionSetPublish,
   saveQuestionSet,
-  upsertDailyPost,
 } from '../services/postArchiveService'
 import { devGroup, devLog, isDevMode, preview } from '../utils/devLog'
 
 const router = Router()
+
+interface PreviousDayPayload {
+  date: string
+  questions: Question[]
+  questionSetId: number | null
+}
+
+async function resolvePreviousDayForPlatform(
+  postDate: string,
+  platform: 'xhs' | 'douyin',
+): Promise<PreviousDayPayload | undefined> {
+  const dayBefore = getDayBefore(postDate)
+  const previousRecord = await getPostByDateForPlatform(dayBefore, platform)
+  return previousRecord
+    ? {
+        date: dayBefore,
+        questions: previousRecord.questions,
+        questionSetId: previousRecord.questionSetId,
+      }
+    : undefined
+}
 
 function countImages(todayCount: number, previousCount: number, includeTodayAnswers = false): number {
   const todayAnswers = includeTodayAnswers ? todayCount : 0
@@ -31,7 +52,8 @@ function countImages(todayCount: number, previousCount: number, includeTodayAnsw
 async function buildPreparePayload(
   questions: Question[],
   options: {
-    previousDay?: { date: string; questions: Question[] }
+    previousDayXhs?: PreviousDayPayload
+    previousDayDouyin?: PreviousDayPayload
     includeAnswers?: boolean
     savedDate?: string
     questionSetId?: number
@@ -39,18 +61,28 @@ async function buildPreparePayload(
 ) {
   const postDate = options.savedDate ?? getTodayDateStr()
   const dayNumber = await getDayNumberForDate(postDate)
-  const postOpts: BuildPostOptions = {
-    previousDay: options.previousDay,
-    includeAnswers: options.includeAnswers ?? false,
+  const includeAnswers = options.includeAnswers === true
+
+  const postOptsXhs: BuildPostOptions = {
+    previousDay: options.previousDayXhs,
+    includeAnswers,
     dayNumber,
   }
-  const post = buildXhsPost(questions, postOpts)
-  const copyText = formatCopyText(post, postOpts)
-  const douyinPost = buildDouyinPost(questions, postOpts)
-  const douyinCopyText = formatDouyinCopyText(douyinPost, postOpts)
-  const includeAnswers = postOpts.includeAnswers === true
-  const previousCount = includeAnswers ? 0 : (options.previousDay?.questions.length ?? 0)
-  const imageCount = countImages(questions.length, previousCount, includeAnswers)
+  const postOptsDouyin: BuildPostOptions = {
+    previousDay: options.previousDayDouyin,
+    includeAnswers,
+    dayNumber,
+  }
+
+  const post = buildXhsPost(questions, postOptsXhs)
+  const copyText = formatCopyText(post, postOptsXhs)
+  const douyinPost = buildDouyinPost(questions, postOptsDouyin)
+  const douyinCopyText = formatDouyinCopyText(douyinPost, postOptsDouyin)
+
+  const previousCountXhs = includeAnswers ? 0 : (options.previousDayXhs?.questions.length ?? 0)
+  const previousCountDouyin = includeAnswers ? 0 : (options.previousDayDouyin?.questions.length ?? 0)
+  const imageCountXhs = countImages(questions.length, previousCountXhs, includeAnswers)
+  const imageCountDouyin = countImages(questions.length, previousCountDouyin, includeAnswers)
 
   return {
     post,
@@ -59,10 +91,19 @@ async function buildPreparePayload(
     douyinPost,
     douyinCopyText,
     douyinCreatorUrl: DOUYIN_CREATOR_URL,
-    imageCount,
+    imageCount: imageCountXhs,
+    imageCountXhs,
+    imageCountDouyin,
     questions,
-    previousDayQuestions: includeAnswers ? [] : (options.previousDay?.questions ?? []),
-    previousDayDate: includeAnswers ? null : (options.previousDay?.date ?? null),
+    previousDayQuestions: includeAnswers ? [] : (options.previousDayXhs?.questions ?? []),
+    previousDayDate: includeAnswers ? null : (options.previousDayXhs?.date ?? null),
+    previousDayQuestionSetId: includeAnswers ? null : (options.previousDayXhs?.questionSetId ?? null),
+    previousDayQuestionsXhs: includeAnswers ? [] : (options.previousDayXhs?.questions ?? []),
+    previousDayDateXhs: includeAnswers ? null : (options.previousDayXhs?.date ?? null),
+    previousDayQuestionSetIdXhs: includeAnswers ? null : (options.previousDayXhs?.questionSetId ?? null),
+    previousDayQuestionsDouyin: includeAnswers ? [] : (options.previousDayDouyin?.questions ?? []),
+    previousDayDateDouyin: includeAnswers ? null : (options.previousDayDouyin?.date ?? null),
+    previousDayQuestionSetIdDouyin: includeAnswers ? null : (options.previousDayDouyin?.questionSetId ?? null),
     savedDate: postDate,
     includeTodayAnswers: includeAnswers,
     questionSetId: options.questionSetId ?? null,
@@ -131,14 +172,12 @@ router.post('/history/:id/prepare', async (req, res) => {
       return
     }
 
-    const yesterday = getYesterdayDateStr()
-    const previousRecord = await getPostByDate(yesterday)
-    const previousDay = previousRecord
-      ? { date: yesterday, questions: previousRecord.questions }
-      : undefined
+    const previousDayXhs = await resolvePreviousDayForPlatform(record.postDate, 'xhs')
+    const previousDayDouyin = await resolvePreviousDayForPlatform(record.postDate, 'douyin')
 
     const payload = await buildPreparePayload(record.questions, {
-      previousDay,
+      previousDayXhs,
+      previousDayDouyin,
       includeAnswers: false,
       savedDate: record.postDate,
       questionSetId: record.id,
@@ -190,19 +229,15 @@ router.post('/prepare', async (req, res) => {
     }
 
     const today = getTodayDateStr()
-    const yesterday = getYesterdayDateStr()
     const saveSource = source === 'vocab' ? 'vocab' : 'ai'
 
     const saved = await saveQuestionSet(questions, saveSource)
-    await upsertDailyPost(today, questions)
-
-    const previousRecord = await getPostByDate(yesterday)
-    const previousDay = previousRecord
-      ? { date: yesterday, questions: previousRecord.questions }
-      : undefined
+    const previousDayXhs = await resolvePreviousDayForPlatform(today, 'xhs')
+    const previousDayDouyin = await resolvePreviousDayForPlatform(today, 'douyin')
 
     const payload = await buildPreparePayload(questions, {
-      previousDay,
+      previousDayXhs,
+      previousDayDouyin,
       savedDate: today,
       questionSetId: saved.id,
     })
@@ -212,7 +247,8 @@ router.post('/prepare', async (req, res) => {
       durationMs,
       questionCount: questions.length,
       questionSetId: saved.id,
-      previousDayCount: previousDay?.questions.length ?? 0,
+      previousDayCountXhs: previousDayXhs?.questions.length ?? 0,
+      previousDayCountDouyin: previousDayDouyin?.questions.length ?? 0,
       savedDate: today,
       xhsTitle: preview(payload.post.title, 50),
       xhsBodyLength: payload.post.body.length,
@@ -231,6 +267,48 @@ router.post('/prepare', async (req, res) => {
   } catch (err) {
     console.error('[prepare] 失败:', err)
     res.status(500).json({ error: '发布内容准备失败' })
+  }
+})
+
+router.post('/publish', async (req, res) => {
+  try {
+    if (!isMysqlReady()) {
+      res.status(503).json({ error: '数据库未就绪，请检查 MySQL 配置与连接' })
+      return
+    }
+
+    const { questionSetId, platform } = req.body as {
+      questionSetId?: number
+      platform?: 'xhs' | 'douyin'
+    }
+
+    if (!Number.isFinite(questionSetId) || (questionSetId as number) <= 0) {
+      res.status(400).json({ error: '请提供有效的题目存档 ID' })
+      return
+    }
+    if (platform !== 'xhs' && platform !== 'douyin') {
+      res.status(400).json({ error: '请指定发布平台：xhs 或 douyin' })
+      return
+    }
+
+    const { record, publishCount } = await recordQuestionSetPublish(
+      questionSetId as number,
+      platform,
+    )
+    res.json({
+      ok: true,
+      questionSetId: record.id,
+      postDate: record.postDate,
+      platform,
+      publishCount,
+      publishedXhsAt: record.publishedXhsAt ?? null,
+      publishedDouyinAt: record.publishedDouyinAt ?? null,
+      xhsPublishCount: record.xhsPublishCount,
+      douyinPublishCount: record.douyinPublishCount,
+    })
+  } catch (err) {
+    console.error('[publish] 失败:', err)
+    res.status(500).json({ error: err instanceof Error ? err.message : '发布记录失败' })
   }
 })
 

@@ -129,6 +129,22 @@ defineExpose({ refresh: loadFirstPage })
                 含图形
               </el-tag>
               <el-tag v-if="item.hasTable" size="small" type="info" effect="plain">含表格</el-tag>
+              <el-tag
+                v-if="item.xhsPublishCount"
+                size="small"
+                color="#fff0f0"
+                style="color: #e53935; border: none"
+              >
+                小红书×{{ item.xhsPublishCount }}
+              </el-tag>
+              <el-tag
+                v-if="item.douyinPublishCount"
+                size="small"
+                color="#f0f4ff"
+                style="color: #3949ab; border: none"
+              >
+                抖音×{{ item.douyinPublishCount }}
+              </el-tag>
             </div>
             <div class="item-meta">
               <span>#{{ item.id }}</span>

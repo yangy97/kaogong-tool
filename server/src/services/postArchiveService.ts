@@ -19,6 +19,10 @@ export interface QuestionSetRecord {
   questions: Question[]
   source: 'ai' | 'vocab'
   savedAt: string
+  publishedXhsAt?: string | null
+  publishedDouyinAt?: string | null
+  xhsPublishCount: number
+  douyinPublishCount: number
 }
 
 export interface QuestionSetSummary {
@@ -34,6 +38,18 @@ export interface QuestionSetSummary {
   previewStem: string
   hasTuxing: boolean
   hasTable: boolean
+  publishedXhsAt?: string | null
+  publishedDouyinAt?: string | null
+  xhsPublishCount: number
+  douyinPublishCount: number
+}
+
+export interface PublishLogRecord {
+  id: number
+  questionSetId: number
+  platform: 'xhs' | 'douyin'
+  postDate: string
+  publishedAt: string
 }
 
 interface QuestionSetRow extends RowDataPacket {
@@ -47,6 +63,26 @@ interface QuestionSetRow extends RowDataPacket {
   questions: string | Question[]
   source: 'ai' | 'vocab'
   saved_at: Date | string
+  published_xhs_at?: Date | string | null
+  published_douyin_at?: Date | string | null
+  xhs_publish_count?: number
+  douyin_publish_count?: number
+}
+
+interface DailyPostRow extends RowDataPacket {
+  post_date: Date | string
+  questions: string | Question[]
+  question_set_id: number | null
+  xhs_question_set_id: number | null
+  douyin_question_set_id: number | null
+}
+
+interface PublishLogRow extends RowDataPacket {
+  id: number
+  question_set_id: number
+  platform: 'xhs' | 'douyin'
+  post_date: Date | string
+  published_at: Date | string
 }
 
 interface CountRow extends RowDataPacket {
@@ -85,9 +121,15 @@ export function getTodayDateStr(): string {
 }
 
 export function getYesterdayDateStr(): string {
-  const d = new Date()
-  d.setDate(d.getDate() - 1)
-  return formatLocalDate(d)
+  return getDayBefore(getTodayDateStr())
+}
+
+/** 指定日期的前一天（本地日历） */
+export function getDayBefore(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  date.setDate(date.getDate() - 1)
+  return formatLocalDate(date)
 }
 
 function normalizeDate(value: Date | string): string {
@@ -122,6 +164,10 @@ function toSummary(row: QuestionSetRow): QuestionSetSummary {
     previewStem: formatPreviewStem(questions[0]?.stem ?? ''),
     hasTuxing: flags.hasTuxing,
     hasTable: flags.hasTable,
+    publishedXhsAt: row.published_xhs_at ? normalizeSavedAt(row.published_xhs_at) : null,
+    publishedDouyinAt: row.published_douyin_at ? normalizeSavedAt(row.published_douyin_at) : null,
+    xhsPublishCount: row.xhs_publish_count ?? 0,
+    douyinPublishCount: row.douyin_publish_count ?? 0,
   }
 }
 
@@ -137,6 +183,10 @@ function toRecord(row: QuestionSetRow): QuestionSetRecord {
     questions: parseQuestions(row.questions),
     source: row.source,
     savedAt: normalizeSavedAt(row.saved_at),
+    publishedXhsAt: row.published_xhs_at ? normalizeSavedAt(row.published_xhs_at) : null,
+    publishedDouyinAt: row.published_douyin_at ? normalizeSavedAt(row.published_douyin_at) : null,
+    xhsPublishCount: row.xhs_publish_count ?? 0,
+    douyinPublishCount: row.douyin_publish_count ?? 0,
   }
 }
 
@@ -184,18 +234,143 @@ export async function saveQuestionSet(
   return saved
 }
 
-/** 兼容次日答案：仍更新 daily_posts（当日最后一次生成作为「正式打卡」） */
-export async function upsertDailyPost(date: string, questions: Question[]): Promise<void> {
+export interface DailyPostSnapshot {
+  date: string
+  questions: Question[]
+  questionSetId: number | null
+  xhsQuestionSetId: number | null
+  douyinQuestionSetId: number | null
+}
+
+async function getDailyPostRow(date: string): Promise<DailyPostRow | null> {
+  const pool = getPool()
+  const [rows] = await pool.query<DailyPostRow[]>(
+    `SELECT post_date, questions, question_set_id, xhs_question_set_id, douyin_question_set_id
+     FROM daily_posts WHERE post_date = ? LIMIT 1`,
+    [date],
+  )
+  return rows[0] ?? null
+}
+
+/** 正式打卡：脚本修复或发布时写入 */
+export async function upsertDailyPost(
+  date: string,
+  questions: Question[],
+  options?: {
+    questionSetId?: number
+    xhsQuestionSetId?: number
+    douyinQuestionSetId?: number
+  },
+): Promise<void> {
   const pool = getPool()
   const nowLocal = formatLocalDateTime()
+  const setId = options?.questionSetId ?? null
+  const xhsId = options?.xhsQuestionSetId ?? null
+  const douyinId = options?.douyinQuestionSetId ?? null
   await pool.query(
-    `INSERT INTO daily_posts (post_date, questions, saved_at, updated_at)
-     VALUES (?, ?, ?, ?)
+    `INSERT INTO daily_posts
+      (post_date, questions, question_set_id, xhs_question_set_id, douyin_question_set_id, saved_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        questions = VALUES(questions),
+       question_set_id = VALUES(question_set_id),
+       xhs_question_set_id = COALESCE(VALUES(xhs_question_set_id), xhs_question_set_id),
+       douyin_question_set_id = COALESCE(VALUES(douyin_question_set_id), douyin_question_set_id),
        updated_at = ?`,
-    [date, serializeQuestionsForDb(questions), nowLocal, nowLocal, nowLocal],
+    [date, serializeQuestionsForDb(questions), setId, xhsId, douyinId, nowLocal, nowLocal, nowLocal],
   )
+}
+
+async function updateDailyPostOnPublish(
+  record: QuestionSetRecord,
+  platform: 'xhs' | 'douyin',
+): Promise<void> {
+  const pool = getPool()
+  const nowLocal = formatLocalDateTime()
+  const questionsJson = serializeQuestionsForDb(record.questions)
+  const platformCol = platform === 'xhs' ? 'xhs_question_set_id' : 'douyin_question_set_id'
+  const existing = await getDailyPostRow(record.postDate)
+
+  if (!existing) {
+    await pool.query(
+      `INSERT INTO daily_posts
+        (post_date, questions, question_set_id, xhs_question_set_id, douyin_question_set_id, saved_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        record.postDate,
+        questionsJson,
+        record.id,
+        platform === 'xhs' ? record.id : null,
+        platform === 'douyin' ? record.id : null,
+        nowLocal,
+        nowLocal,
+      ],
+    )
+    return
+  }
+
+  await pool.query(
+    `UPDATE daily_posts
+     SET questions = ?, question_set_id = ?, ${platformCol} = ?, updated_at = ?
+     WHERE post_date = ?`,
+    [questionsJson, record.id, record.id, nowLocal, record.postDate],
+  )
+}
+
+/** 记录发布点击：写日志、累加次数、更新分平台打卡 */
+export async function recordQuestionSetPublish(
+  questionSetId: number,
+  platform: 'xhs' | 'douyin',
+): Promise<{ record: QuestionSetRecord; publishCount: number }> {
+  const record = await getQuestionSetById(questionSetId)
+  if (!record) throw new Error('历史记录不存在')
+
+  const pool = getPool()
+  const nowLocal = formatLocalDateTime()
+  const countCol = platform === 'xhs' ? 'xhs_publish_count' : 'douyin_publish_count'
+  const atCol = platform === 'xhs' ? 'published_xhs_at' : 'published_douyin_at'
+
+  await pool.query(
+    `INSERT INTO publish_logs (question_set_id, platform, post_date, published_at)
+     VALUES (?, ?, ?, ?)`,
+    [questionSetId, platform, record.postDate, nowLocal],
+  )
+  await pool.query(
+    `UPDATE question_sets SET ${countCol} = ${countCol} + 1, ${atCol} = ? WHERE id = ?`,
+    [nowLocal, questionSetId],
+  )
+  await updateDailyPostOnPublish(record, platform)
+
+  const updated = await getQuestionSetById(questionSetId)
+  if (!updated) throw new Error('发布记录更新失败')
+  const publishCount = platform === 'xhs' ? updated.xhsPublishCount : updated.douyinPublishCount
+  return { record: updated, publishCount }
+}
+
+/** @deprecated 使用 recordQuestionSetPublish */
+export async function markQuestionSetPublished(
+  questionSetId: number,
+  platform: 'xhs' | 'douyin',
+): Promise<QuestionSetRecord> {
+  const { record } = await recordQuestionSetPublish(questionSetId, platform)
+  return record
+}
+
+export async function listPublishLogsForSet(questionSetId: number): Promise<PublishLogRecord[]> {
+  const pool = getPool()
+  const [rows] = await pool.query<PublishLogRow[]>(
+    `SELECT id, question_set_id, platform, post_date, published_at
+     FROM publish_logs WHERE question_set_id = ?
+     ORDER BY published_at DESC`,
+    [questionSetId],
+  )
+  return rows.map((row) => ({
+    id: row.id,
+    questionSetId: row.question_set_id,
+    platform: row.platform,
+    postDate: normalizeDate(row.post_date),
+    publishedAt: normalizeSavedAt(row.published_at),
+  }))
 }
 
 /** 按 daily_posts 累计打卡天数（含当日），用于标题 DAY 序号 */
@@ -208,17 +383,43 @@ export async function getDayNumberForDate(date: string): Promise<number> {
   return Math.max(1, rows[0]?.total ?? 1)
 }
 
-export async function getPostByDate(date: string): Promise<{ date: string; questions: Question[] } | null> {
-  const pool = getPool()
-  const [rows] = await pool.query<RowDataPacket[]>(
-    'SELECT post_date, questions FROM daily_posts WHERE post_date = ? LIMIT 1',
-    [date],
-  )
-  if (!rows.length) return null
-  const row = rows[0]
+async function loadQuestionsForSetId(setId: number | null): Promise<Question[] | null> {
+  if (!setId) return null
+  const record = await getQuestionSetById(setId)
+  return record?.questions ?? null
+}
+
+/** 按平台取某日正式打卡（优先分平台 ID，回退通用 ID / JSON） */
+export async function getPostByDateForPlatform(
+  date: string,
+  platform: 'xhs' | 'douyin',
+): Promise<{ date: string; questions: Question[]; questionSetId: number | null } | null> {
+  const row = await getDailyPostRow(date)
+  if (!row) return null
+
+  const platformSetId =
+    platform === 'xhs' ? row.xhs_question_set_id : row.douyin_question_set_id
+  const fallbackSetId = row.question_set_id
+  const resolvedSetId = platformSetId ?? fallbackSetId
+
+  const fromSet = await loadQuestionsForSetId(resolvedSetId)
+  const questions = fromSet ?? parseQuestions(row.questions)
+
   return {
-    date: normalizeDate(row.post_date as Date | string),
-    questions: parseQuestions(row.questions as string | Question[]),
+    date: normalizeDate(row.post_date),
+    questions,
+    questionSetId: resolvedSetId,
+  }
+}
+
+export async function getPostByDate(date: string): Promise<{ date: string; questions: Question[] } | null> {
+  const snap = await getPostByDateForPlatform(date, 'xhs')
+  if (snap) return { date: snap.date, questions: snap.questions }
+  const row = await getDailyPostRow(date)
+  if (!row) return null
+  return {
+    date: normalizeDate(row.post_date),
+    questions: parseQuestions(row.questions),
   }
 }
 
@@ -234,7 +435,9 @@ export async function listQuestionSets(
 
   const [rows] = await pool.query<QuestionSetRow[]>(
     `SELECT id, post_date, module_id, module_name, topic_id, topic_name,
-            question_count, questions, source, saved_at
+            question_count, questions, source, saved_at,
+            published_xhs_at, published_douyin_at,
+            xhs_publish_count, douyin_publish_count
      FROM question_sets
      ORDER BY saved_at DESC
      LIMIT ? OFFSET ?`,
@@ -253,7 +456,9 @@ export async function getQuestionSetById(id: number): Promise<QuestionSetRecord 
   const pool = getPool()
   const [rows] = await pool.query<QuestionSetRow[]>(
     `SELECT id, post_date, module_id, module_name, topic_id, topic_name,
-            question_count, questions, source, saved_at
+            question_count, questions, source, saved_at,
+            published_xhs_at, published_douyin_at,
+            xhs_publish_count, douyin_publish_count
      FROM question_sets WHERE id = ? LIMIT 1`,
     [id],
   )

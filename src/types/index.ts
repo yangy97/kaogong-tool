@@ -186,6 +186,10 @@ export interface QuestionSetSummary {
   previewStem: string
   hasTuxing: boolean
   hasTable: boolean
+  publishedXhsAt?: string | null
+  publishedDouyinAt?: string | null
+  xhsPublishCount?: number
+  douyinPublishCount?: number
 }
 
 export interface PrepareResult {
@@ -196,9 +200,18 @@ export interface PrepareResult {
   douyinCopyText: string
   douyinCreatorUrl: string
   imageCount: number
+  imageCountXhs?: number
+  imageCountDouyin?: number
   questions: Question[]
   previousDayQuestions: Question[]
   previousDayDate: string | null
+  previousDayQuestionSetId?: number | null
+  previousDayQuestionsXhs?: Question[]
+  previousDayDateXhs?: string | null
+  previousDayQuestionSetIdXhs?: number | null
+  previousDayQuestionsDouyin?: Question[]
+  previousDayDateDouyin?: string | null
+  previousDayQuestionSetIdDouyin?: number | null
   savedDate: string
   includeTodayAnswers?: boolean
   questionSetId?: number | null

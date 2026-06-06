@@ -78,8 +78,16 @@ const xhsZipName = ref('考公小红书配图.zip')
 const douyinZipName = ref('考公抖音配图.zip')
 const previousDayQuestions = ref<Question[]>([])
 const previousDayDate = ref<string | null>(null)
+const previousDayQuestionSetId = ref<number | null>(null)
+const previousDayQuestionsXhs = ref<Question[]>([])
+const previousDayDateXhs = ref<string | null>(null)
+const previousDayQuestionSetIdXhs = ref<number | null>(null)
+const previousDayQuestionsDouyin = ref<Question[]>([])
+const previousDayDateDouyin = ref<string | null>(null)
+const previousDayQuestionSetIdDouyin = ref<number | null>(null)
 const includeTodayAnswers = ref(false)
 const loadedHistoryId = ref<number | null>(null)
+const questionSetId = ref<number | null>(null)
 const historyPanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
 const imageLoading = ref(false)
 const loadingPlatform = ref<ImagePlatform | null>(null)
@@ -132,7 +140,15 @@ function applyPrepareResult(xhs: PrepareResult) {
   douyinCreatorUrl.value = xhs.douyinCreatorUrl
   previousDayQuestions.value = xhs.previousDayQuestions
   previousDayDate.value = xhs.previousDayDate
+  previousDayQuestionSetId.value = xhs.previousDayQuestionSetId ?? null
+  previousDayQuestionsXhs.value = xhs.previousDayQuestionsXhs ?? xhs.previousDayQuestions
+  previousDayDateXhs.value = xhs.previousDayDateXhs ?? xhs.previousDayDate
+  previousDayQuestionSetIdXhs.value = xhs.previousDayQuestionSetIdXhs ?? xhs.previousDayQuestionSetId ?? null
+  previousDayQuestionsDouyin.value = xhs.previousDayQuestionsDouyin ?? []
+  previousDayDateDouyin.value = xhs.previousDayDateDouyin ?? null
+  previousDayQuestionSetIdDouyin.value = xhs.previousDayQuestionSetIdDouyin ?? null
   includeTodayAnswers.value = xhs.includeTodayAnswers ?? false
+  questionSetId.value = xhs.questionSetId ?? null
   if (xhs.questions.length) {
     questions.value = xhs.questions
   }
@@ -145,8 +161,16 @@ function resetOutput() {
   source.value = null
   sourceMode.value = ''
   loadedHistoryId.value = null
+  questionSetId.value = null
   previousDayQuestions.value = []
   previousDayDate.value = null
+  previousDayQuestionSetId.value = null
+  previousDayQuestionsXhs.value = []
+  previousDayDateXhs.value = null
+  previousDayQuestionSetIdXhs.value = null
+  previousDayQuestionsDouyin.value = []
+  previousDayDateDouyin.value = null
+  previousDayQuestionSetIdDouyin.value = null
   includeTodayAnswers.value = false
   clearImageCache()
 }
@@ -458,9 +482,20 @@ async function ensureImages(platform: ImagePlatform): Promise<GeneratedImage[]> 
   const cache = platform === 'xhs' ? xhsImages : douyinImages
   if (cache.value.length) return cache.value
 
+  const answerQuestions = includeTodayAnswers.value
+    ? []
+    : platform === 'xhs'
+      ? previousDayQuestionsXhs.value
+      : previousDayQuestionsDouyin.value
+  const answerDate = includeTodayAnswers.value
+    ? undefined
+    : platform === 'xhs'
+      ? (previousDayDateXhs.value ?? undefined)
+      : (previousDayDateDouyin.value ?? undefined)
+
   const generated = await generatePlatformImages(questions.value, post.value, platform, {
-    answerQuestions: includeTodayAnswers.value ? [] : previousDayQuestions.value,
-    answerDate: previousDayDate.value ?? undefined,
+    answerQuestions,
+    answerDate,
     includeTodayAnswers: includeTodayAnswers.value,
   })
     const date = new Date().toISOString().slice(0, 10)
@@ -535,6 +570,20 @@ async function handlePublishPlatform(platform: ImagePlatform) {
 
     if (platform === 'xhs') openXhsCreator(url)
     else openDouyinCreator(url)
+
+    if (questionSetId.value) {
+      try {
+        const res = await api.recordPublish(questionSetId.value, platform)
+        void historyPanelRef.value?.refresh()
+        showToast(
+          `文案已复制，${name} 已下载，${label}创作中心已打开（#${res.questionSetId} 第 ${res.publishCount} 次发布）`,
+          6000,
+        )
+        return
+      } catch (err) {
+        console.warn('[publish] 记录发布失败:', err)
+      }
+    }
 
     showToast(
       `文案已复制，${name} 已下载，${label}创作中心已打开`,
@@ -807,8 +856,12 @@ async function handleHistoryLoaded(items: QuestionSetSummary[]) {
                 <PublishPanel
                   :post="post"
                   :publishing="publishing"
-                  :previous-day-date="previousDayDate"
-                  :previous-day-count="previousDayQuestions.length"
+                  :previous-day-date-xhs="previousDayDateXhs"
+                  :previous-day-count-xhs="previousDayQuestionsXhs.length"
+                  :previous-day-set-id-xhs="previousDayQuestionSetIdXhs"
+                  :previous-day-date-douyin="previousDayDateDouyin"
+                  :previous-day-count-douyin="previousDayQuestionsDouyin.length"
+                  :previous-day-set-id-douyin="previousDayQuestionSetIdDouyin"
                   :xhs-image-count="xhsImages.length"
                   :douyin-image-count="douyinImages.length"
                   @copy-xhs="handleCopyXhs"
@@ -888,8 +941,12 @@ async function handleHistoryLoaded(items: QuestionSetSummary[]) {
             <PublishPanel
               :post="post"
               :publishing="publishing"
-              :previous-day-date="previousDayDate"
-              :previous-day-count="previousDayQuestions.length"
+              :previous-day-date-xhs="previousDayDateXhs"
+              :previous-day-count-xhs="previousDayQuestionsXhs.length"
+              :previous-day-set-id-xhs="previousDayQuestionSetIdXhs"
+              :previous-day-date-douyin="previousDayDateDouyin"
+              :previous-day-count-douyin="previousDayQuestionsDouyin.length"
+              :previous-day-set-id-douyin="previousDayQuestionSetIdDouyin"
               :xhs-image-count="xhsImages.length"
               :douyin-image-count="douyinImages.length"
               @copy-xhs="handleCopyXhs"
