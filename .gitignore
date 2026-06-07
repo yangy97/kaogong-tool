@@ -3,3 +3,6 @@ dist
 .env
 *.log
 .DS_Store
+
+# 图形题 PNG 为运行时缓存，矢量数据在数据库，部署后自动重烘焙
+server/public/tuxing-images/*.png

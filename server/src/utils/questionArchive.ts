@@ -2,6 +2,9 @@ import type { Question } from '../types/index'
 import { normalizeStemTables } from './stemFormat'
 import { isGridTuxing, syncTuxingAnalysis } from './tuxingAnalysisSync'
 import { normalizeTuxingFromAi } from './tuxingNormalize'
+import { validateAndRepairTuxing } from './tuxingRepair'
+import { synthesizeTuxingFallback } from './tuxingSynthesize'
+import { bakeTuxingImages, hasCompleteImageUrls } from '../services/tuxingImageService'
 
 export interface QuestionContentFlags {
   hasTuxing: boolean
@@ -35,11 +38,19 @@ function normalizeQuestionFromDb(q: Question): Question {
 
   if (tuxing) {
     const normalized = normalizeTuxingFromAi(tuxing)
-    if (normalized) tuxing = normalized
+    if (normalized) {
+      tuxing = validateAndRepairTuxing(normalized, q.answer, q.topicId, q.analysis, q.stem)
+    } else {
+      tuxing = synthesizeTuxingFallback(q.topicId, q.answer, q.analysis, q.stem, tuxing)
+    }
   }
 
   if (tuxing && isGridTuxing(tuxing)) {
     analysis = syncTuxingAnalysis(tuxing, q.answer)
+  }
+
+  if (tuxing && !hasCompleteImageUrls(tuxing)) {
+    tuxing = bakeTuxingImages(tuxing, { questionId: q.id })
   }
 
   return { ...q, stem, tuxing, analysis }

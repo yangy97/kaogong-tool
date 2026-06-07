@@ -6,7 +6,7 @@ const MODULE_SYSTEM_EXTRAS: Record<string, string> = {
   ziliao: '资料分析：完整材料表格+多步计算，禁止一步口算。',
   yanyu: '言语：文段完整、选项语义接近，禁止原文即答案。',
   shuliang: '数量：情境真实需列式，禁止纯观察秒杀。',
-  panduan: '判断：干扰项看似正确但关键词不符。',
+  panduan: '判断推理：定义/类比/逻辑论证/分析推理等题型；禁止资料分析式表格计算、禁止数量关系应用题。',
   changshi: '常识：考点准确，干扰项为易混知识点。',
   shenlun: '申论：材料与设问贴近真题，要点可评分。',
 }
@@ -37,7 +37,7 @@ function getModuleBaseHints(moduleId: string): string {
     case 'shuliang':
       return '数量：题干需列式，数字避免过于整齐。'
     case 'panduan':
-      return '判断：图形题返回 tuxing JSON；其余干扰项关键词不符。'
+      return '判断：图形题返回 tuxing JSON；非图形题为逻辑/定义/类比/匹配排序；严禁增长率/比重/营收/人口统计等资料计算题。'
     case 'changshi':
       return '常识：表述准确，干扰项为易混点。'
     case 'shenlun':
@@ -59,6 +59,9 @@ export function getModulePromptHints(
 
   if (module.id === 'panduan' && topic?.id.includes('tuxing')) {
     extras.push('本题必须含 tuxing 字段')
+  }
+  if (module.id === 'panduan' && !topic) {
+    extras.push('未指定考点时从定义判断/类比推理/加强削弱/分析推理/翻译推理中随机选取，禁止出资料计算题')
   }
   if (module.id === 'ziliao') {
     extras.push('stem 含 Markdown 表格')

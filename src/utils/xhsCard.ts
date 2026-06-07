@@ -227,7 +227,10 @@ function buildYesterdayQuestionSectionHtml(q: Question, platform: ImagePlatform)
 
   let bodyHtml = stemToHtml(q.stem, { dark: platform === 'douyin' })
   if (q.tuxing) {
-    bodyHtml += tuxingToHtml(q.tuxing, { figureSize: platform === 'douyin' ? 52 : 56, dark: platform === 'douyin' })
+    bodyHtml += tuxingToHtml(q.tuxing, {
+      figureSize: platform === 'douyin' ? 52 : 56,
+      dark: platform === 'douyin',
+    })
   } else if (q.options?.length) {
     const optBg = platform === 'douyin' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'
     const optsHtml = q.options
@@ -348,7 +351,10 @@ async function renderQuestionCard(
   let content = q.stem
   let contentHtml = stemToHtml(q.stem, { dark: platform === 'douyin' })
   if (q.tuxing) {
-    contentHtml += tuxingToHtml(q.tuxing, { figureSize: 64, dark: platform === 'douyin' })
+    contentHtml += tuxingToHtml(q.tuxing, {
+      figureSize: 64,
+      dark: platform === 'douyin',
+    })
   } else if (q.options?.length) {
     const optsText = q.options.map((o) => `${o.key}. ${o.text}`).join('\n')
     content += '\n\n' + optsText

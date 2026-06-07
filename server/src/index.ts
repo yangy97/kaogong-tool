@@ -9,6 +9,7 @@ import { getMysqlConfig, initMysql, isMysqlReady } from './db/mysql'
 import questionsRouter from './routes/questions'
 import vocabRouter from './routes/vocab'
 import xhsRouter from './routes/xhs'
+import { TUXING_IMAGES_DIR, TUXING_IMAGES_URL_PREFIX } from './services/tuxingImageService'
 
 const serverRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 dotenv.config({ path: path.join(serverRoot, '.env') })
@@ -39,6 +40,9 @@ app.get('/api/health', (_req, res) => {
     dbName: mysqlCfg.database,
   })
 })
+
+fs.mkdirSync(TUXING_IMAGES_DIR, { recursive: true })
+app.use(TUXING_IMAGES_URL_PREFIX, express.static(TUXING_IMAGES_DIR, { maxAge: '7d' }))
 
 app.use('/api/questions', questionsRouter)
 app.use('/api/vocab', vocabRouter)

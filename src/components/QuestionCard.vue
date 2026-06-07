@@ -47,7 +47,7 @@ const diffType: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
 
     <StemContent :content="question.stem" class="stem" />
 
-    <TuxingBlock v-if="question.tuxing" :data="question.tuxing" />
+    <TuxingBlock v-if="question.tuxing" :tuxing="question.tuxing" />
 
     <ul v-else-if="question.options?.length" class="options">
       <li v-for="opt in question.options" :key="opt.key">

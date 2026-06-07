@@ -8,15 +8,26 @@ import { buildStrictDifficultyBlock, getAiTemperature, type Difficulty } from '.
 import { normalizeStemTables } from '../utils/stemFormat'
 import { compactAnalysis } from '../utils/analysisNormalize'
 import { normalizeTuxingFromAi } from '../utils/tuxingNormalize'
+import { validateAndRepairTuxing, validateTuxingData } from '../utils/tuxingRepair'
+import { synthesizeTuxingFallback } from '../utils/tuxingSynthesize'
 import { isGridTuxing, syncTuxingAnalysis } from '../utils/tuxingAnalysisSync'
 import {
   buildAnswerDiversityRetryHint,
+  diversifyChoiceAnswers,
   hasDuplicateChoiceAnswers,
   summarizeAnswerKeys,
 } from '../utils/answerDiversify'
+import {
+  buildTuxingDiversityRetryHint,
+  deduplicateBatchTuxing,
+  findDuplicateTuxingIndices,
+  hasDuplicateTuxingInBatch,
+} from '../utils/tuxingDeduplicate'
 import { isTuxingTopicId } from '../types/tuxing'
 import { devGroup, devLog, preview } from '../utils/devLog'
 import { parseAiJsonArray } from '../utils/parseAiJson'
+import { moduleMismatchHint, panduanQuestionOffModule } from '../utils/moduleQuestionGuard'
+import { bakeQuestionsTuxingImages } from './tuxingImageService'
 
 export { getAiConfig, SUPPORTED_AI_MODELS } from '../config/aiConfig'
 export type { AiModelOption, AiRuntimeConfig } from '../config/aiConfig'
@@ -31,12 +42,22 @@ interface AiQuestionRaw {
   tuxing?: TuxingData
 }
 
-function parseAiResponse(text: string, expertPrefix?: string, isTuxing = false): AiQuestionRaw[] {
+function parseAiResponse(text: string, expertPrefix?: string, topicId?: string): AiQuestionRaw[] {
+  const isTuxing = isTuxingTopicId(topicId)
   const parsed = parseAiJsonArray(text, 1) as AiQuestionRaw[]
   return parsed.map((q, i) => {
-    const tuxing = isTuxing ? normalizeTuxingFromAi(q.tuxing) : undefined
-    if (isTuxing && !tuxing) {
-      throw new Error(`第 ${i + 1} 题缺少有效的 tuxing 图形数据，请重试`)
+    let tuxing = isTuxing ? normalizeTuxingFromAi(q.tuxing) : undefined
+    if (isTuxing) {
+      if (!tuxing) {
+        devLog('tuxing', `第 ${i + 1} 题 AI 未返回合法图形，使用程序化合成`, topicId)
+        tuxing = synthesizeTuxingFallback(topicId, q.answer ?? 'A', q.analysis, q.stem, q.tuxing)
+      } else {
+        tuxing = validateAndRepairTuxing(tuxing, q.answer ?? 'A', topicId, q.analysis, q.stem)
+      }
+      const check = validateTuxingData(tuxing)
+      if (!check.ok) {
+        tuxing = synthesizeTuxingFallback(topicId, q.answer ?? 'A', q.analysis, q.stem, q.tuxing)
+      }
     }
     const options =
       isTuxing && tuxing
@@ -225,7 +246,7 @@ export async function generateViaAi(
   let usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined
   let rawParsed: ReturnType<typeof parseAiResponse> = []
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     const streamed = await requestCompletion(userContent)
     content = streamed.content
     usage = streamed.usage
@@ -236,18 +257,37 @@ export async function generateViaAi(
       devLog('AI', 'rawPreview:', preview(content, 200))
     })
 
-    rawParsed = parseAiResponse(content, expert?.analysisPrefix, isTuxingTopicId(topic?.id))
+    rawParsed = parseAiResponse(content, expert?.analysisPrefix, topic?.id)
 
-    if (attempt === 0 && count > 1 && hasDuplicateChoiceAnswers(rawParsed)) {
+    const offModule =
+      module.id === 'panduan' &&
+      !isTuxingTopicId(topic?.id) &&
+      rawParsed.some((q) => panduanQuestionOffModule(q.stem ?? '', q.analysis))
+
+    if (attempt < 2 && offModule) {
+      devLog('AI', '判断推理混入资料/数量题，重试一次')
+      userContent = `${userPrompt}\n\n${moduleMismatchHint(module.id)}`
+      continue
+    }
+
+    if (attempt < 2 && count > 1 && hasDuplicateChoiceAnswers(rawParsed)) {
       const keys = summarizeAnswerKeys(rawParsed)
       devLog('AI', '答案字母过于集中，重试一次:', keys)
       userContent = `${userPrompt}\n\n${buildAnswerDiversityRetryHint(count, keys)}`
       continue
     }
+
+    if (attempt < 2 && count > 1 && isTuxing && hasDuplicateTuxingInBatch(rawParsed)) {
+      const dupes = findDuplicateTuxingIndices(rawParsed)
+      devLog('AI', '图形题重复，重试一次:', dupes.join(','))
+      userContent = `${userPrompt}\n\n${buildTuxingDiversityRetryHint(count, dupes)}`
+      continue
+    }
     break
   }
 
-  const raw = rawParsed.map((q) => {
+  const expertPrefix = expert?.analysisPrefix
+  let raw = rawParsed.map((q) => {
     if (q.tuxing && isGridTuxing(q.tuxing)) {
       return {
         ...q,
@@ -256,17 +296,25 @@ export async function generateViaAi(
     }
     return q
   })
-  const questions = raw.slice(0, count).map((q, i) => ({
-    id: `${module.id}-ai-${Date.now()}-${i}`,
-    moduleId: module.id,
-    moduleName: module.name,
-    topicId: topic?.id,
-    topicName: topic?.name,
-    expertTag: expert?.name,
-    expertStyleLabel: expert?.publishLabel,
-    tags: expert ? [expert.publishLabel, module.name] : undefined,
-    ...q,
-  }))
+
+  raw = diversifyChoiceAnswers(raw, { topicId: topic?.id })
+  if (isTuxing && count > 1) {
+    raw = deduplicateBatchTuxing(raw, { topicId: topic?.id, expertPrefix })
+  }
+
+  const questions = bakeQuestionsTuxingImages(
+    raw.slice(0, count).map((q, i) => ({
+      id: `${module.id}-ai-${Date.now()}-${i}`,
+      moduleId: module.id,
+      moduleName: module.name,
+      topicId: topic?.id,
+      topicName: topic?.name,
+      expertTag: expert?.name,
+      expertStyleLabel: expert?.publishLabel,
+      tags: expert ? [expert.publishLabel, module.name] : undefined,
+      ...q,
+    })),
+  )
 
   devLog('AI', 'parsedQuestions:', questions.map((q, i) => ({
     index: i + 1,

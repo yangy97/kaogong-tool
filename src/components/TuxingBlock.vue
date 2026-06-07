@@ -1,32 +1,57 @@
 <script setup lang="ts">
 import type { TuxingData } from '@/types/tuxing'
-import { figureToSvg, placeholderSvg } from '@/utils/tuxingRender'
+import { placeholderDataUrl } from '@/utils/tuxingRender'
 import { computed } from 'vue'
 
 const props = defineProps<{
-  data: TuxingData
+  tuxing: TuxingData
 }>()
 
 const figureSize = 88
+const optSize = figureSize - 8
 
-const sequenceHtml = computed(() =>
-  props.data.sequence.map((fig) => (fig ? figureToSvg(fig, figureSize) : placeholderSvg(figureSize))),
-)
+const sequenceUrls = computed(() => {
+  const baked = props.tuxing.imageUrls?.sequence
+  const sz = props.tuxing.imageUrls?.seqSize ?? figureSize
+  if (baked?.length) {
+    return baked.map((url) => url ?? placeholderDataUrl(sz))
+  }
+  return props.tuxing.sequence.map(() => placeholderDataUrl(sz))
+})
 
-const optionsHtml = computed(() =>
-  props.data.options.map((fig) => figureToSvg(fig, figureSize - 8)),
-)
+const optionUrls = computed(() => {
+  const baked = props.tuxing.imageUrls?.options
+  const sz = props.tuxing.imageUrls?.optSize ?? optSize
+  if (baked?.length) {
+    return baked.map((url) => url || placeholderDataUrl(sz))
+  }
+  return props.tuxing.options.map(() => placeholderDataUrl(sz))
+})
 </script>
 
 <template>
   <div class="tuxing-block">
     <div class="sequence">
-      <div v-for="(svg, i) in sequenceHtml" :key="'s' + i" class="figure-box" v-html="svg" />
+      <div v-for="(url, i) in sequenceUrls" :key="'s' + i" class="figure-box">
+        <img
+          :src="url"
+          :width="tuxing.imageUrls?.seqSize ?? figureSize"
+          :height="tuxing.imageUrls?.seqSize ?? figureSize"
+          alt=""
+        />
+      </div>
     </div>
     <ul class="figure-options">
-      <li v-for="(svg, i) in optionsHtml" :key="'o' + i">
+      <li v-for="(url, i) in optionUrls" :key="'o' + i">
         <strong>{{ 'ABCD'[i] }}.</strong>
-        <div class="figure-box small" v-html="svg" />
+        <div class="figure-box small">
+          <img
+            :src="url"
+            :width="tuxing.imageUrls?.optSize ?? optSize"
+            :height="tuxing.imageUrls?.optSize ?? optSize"
+            alt=""
+          />
+        </div>
       </li>
     </ul>
   </div>
@@ -58,6 +83,12 @@ const optionsHtml = computed(() =>
   border-radius: 6px;
   background: #fff;
   padding: 2px;
+  line-height: 0;
+}
+
+.figure-box img {
+  display: block;
+  image-rendering: auto;
 }
 
 .figure-box.small {
