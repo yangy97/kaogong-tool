@@ -1159,10 +1159,21 @@ h1 {
   margin-bottom: 24px;
 }
 
+.page-shell:has(.history-layout) {
+  overflow: hidden;
+}
+
+.page-shell-body:has(.history-layout) {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .history-layout {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
-  min-height: min(680px, calc(100vh - 220px));
+  height: min(720px, calc(100vh - 200px));
+  max-height: min(720px, calc(100vh - 200px));
+  overflow: hidden;
   align-items: stretch;
 }
 
@@ -1196,8 +1207,7 @@ h1 {
   padding: 12px 14px !important;
 }
 
-.history-sidebar :deep(.list-wrap) {
-  max-height: none;
+.history-sidebar :deep(.list-panel) {
   flex: 1;
   min-height: 0;
 }
@@ -1268,16 +1278,15 @@ h1 {
 @media (max-width: 768px) {
   .history-layout {
     grid-template-columns: 1fr;
-    min-height: auto;
+    height: auto;
+    max-height: none;
   }
 
   .history-sidebar {
     border-right: none;
     border-bottom: 1px solid var(--ui-border, #e8e8ec);
-  }
-
-  .history-sidebar :deep(.list-wrap) {
-    max-height: min(420px, 50vh);
+    height: min(360px, 45vh);
+    max-height: min(360px, 45vh);
   }
 
   .history-detail {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api } from '@/api'
 import type { QuestionSetSummary } from '@/types'
 
@@ -15,9 +15,12 @@ const emit = defineEmits<{
 const items = ref<QuestionSetSummary[]>([])
 const total = ref(0)
 const page = ref(1)
-const pageSize = 5
+const pageSize = 10
 const loading = ref(false)
 const loadingMore = ref(false)
+const scrollRoot = ref<HTMLElement | null>(null)
+const loadSentinel = ref<HTMLElement | null>(null)
+let loadObserver: IntersectionObserver | null = null
 
 const sourceLabel = (source: QuestionSetSummary['source']) =>
   source === 'vocab' ? '词汇' : 'AI'
@@ -82,8 +85,30 @@ async function loadMore() {
   }
 }
 
-onMounted(() => {
-  void loadFirstPage()
+function setupLoadObserver() {
+  loadObserver?.disconnect()
+  if (!scrollRoot.value || !loadSentinel.value || !hasMore.value) return
+  loadObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting) void loadMore()
+    },
+    { root: scrollRoot.value, rootMargin: '120px', threshold: 0 },
+  )
+  loadObserver.observe(loadSentinel.value)
+}
+
+watch([() => items.value.length, hasMore], () => {
+  void nextTick(() => setupLoadObserver())
+})
+
+onMounted(async () => {
+  await loadFirstPage()
+  await nextTick()
+  setupLoadObserver()
+})
+
+onUnmounted(() => {
+  loadObserver?.disconnect()
 })
 
 defineExpose({ refresh: loadFirstPage })
@@ -99,75 +124,75 @@ defineExpose({ refresh: loadFirstPage })
 
     <el-empty v-if="!items.length && !loading" :description="emptyText" />
 
-    <div v-else class="list-wrap">
-      <div class="list">
-        <div
-          v-for="item in items"
-          :key="item.id"
-          class="history-item"
-          :class="{ active: props.activeId === item.id }"
-          role="button"
-          tabindex="0"
-          @click="emit('view', item.id)"
-          @keydown.enter="emit('view', item.id)"
-        >
-          <div class="item-info">
-            <div class="item-title">
-              <el-tag size="small" effect="plain">{{ item.postDate }}</el-tag>
-              <el-tag size="small" type="danger" effect="plain">{{ item.moduleName }}</el-tag>
-              <el-tag v-if="item.topicName" size="small" type="info" effect="plain">
-                {{ item.topicName }}
-              </el-tag>
-              <el-tag size="small" round>{{ item.questionCount }} 题</el-tag>
-              <el-tag size="small" type="warning" effect="plain">{{ sourceLabel(item.source) }}</el-tag>
-              <el-tag
-                v-if="item.hasTuxing"
-                size="small"
-                color="#f3e5f5"
-                style="color: #7b1fa2; border: none"
-              >
-                含图形
-              </el-tag>
-              <el-tag v-if="item.hasTable" size="small" type="info" effect="plain">含表格</el-tag>
-              <el-tag
-                v-if="item.xhsPublishCount"
-                size="small"
-                color="#fff0f0"
-                style="color: #e53935; border: none"
-              >
-                小红书×{{ item.xhsPublishCount }}
-              </el-tag>
-              <el-tag
-                v-if="item.douyinPublishCount"
-                size="small"
-                color="#f0f4ff"
-                style="color: #3949ab; border: none"
-              >
-                抖音×{{ item.douyinPublishCount }}
-              </el-tag>
+    <div v-else class="list-panel">
+      <div ref="scrollRoot" class="list-scroll">
+        <div class="list">
+          <div
+            v-for="item in items"
+            :key="item.id"
+            class="history-item"
+            :class="{ active: props.activeId === item.id }"
+            role="button"
+            tabindex="0"
+            @click="emit('view', item.id)"
+            @keydown.enter="emit('view', item.id)"
+          >
+            <div class="item-info">
+              <div class="item-title">
+                <el-tag size="small" effect="plain">{{ item.postDate }}</el-tag>
+                <el-tag size="small" type="danger" effect="plain">{{ item.moduleName }}</el-tag>
+                <el-tag v-if="item.topicName" size="small" type="info" effect="plain">
+                  {{ item.topicName }}
+                </el-tag>
+                <el-tag size="small" round>{{ item.questionCount }} 题</el-tag>
+                <el-tag size="small" type="warning" effect="plain">{{ sourceLabel(item.source) }}</el-tag>
+                <el-tag
+                  v-if="item.hasTuxing"
+                  size="small"
+                  color="#f3e5f5"
+                  style="color: #7b1fa2; border: none"
+                >
+                  含图形
+                </el-tag>
+                <el-tag v-if="item.hasTable" size="small" type="info" effect="plain">含表格</el-tag>
+                <el-tag
+                  v-if="item.xhsPublishCount"
+                  size="small"
+                  color="#fff0f0"
+                  style="color: #e53935; border: none"
+                >
+                  小红书×{{ item.xhsPublishCount }}
+                </el-tag>
+                <el-tag
+                  v-if="item.douyinPublishCount"
+                  size="small"
+                  color="#f0f4ff"
+                  style="color: #3949ab; border: none"
+                >
+                  抖音×{{ item.douyinPublishCount }}
+                </el-tag>
+              </div>
+              <div class="item-meta">
+                <span>#{{ item.id }}</span>
+                <span>{{ formatTime(item.savedAt) }}</span>
+              </div>
+              <p class="preview">{{ item.previewStem }}</p>
             </div>
-            <div class="item-meta">
-              <span>#{{ item.id }}</span>
-              <span>{{ formatTime(item.savedAt) }}</span>
-            </div>
-            <p class="preview">{{ item.previewStem }}</p>
-          </div>
 
-          <span v-if="props.activeId === item.id" class="item-status">已查看</span>
+            <span v-if="props.activeId === item.id" class="item-status">已查看</span>
+          </div>
+        </div>
+
+        <div v-if="hasMore" ref="loadSentinel" class="load-sentinel" aria-hidden="true" />
+        <div v-if="loadingMore" class="load-hint">
+          <el-text type="info" size="small">加载更多…</el-text>
         </div>
       </div>
 
       <div v-if="items.length" class="list-footer">
         <el-text type="info" size="small">共 {{ total }} 条 · 已加载 {{ items.length }} 条</el-text>
-        <el-button
-          v-if="hasMore"
-          size="small"
-          :loading="loadingMore"
-          @click="loadMore"
-        >
-          加载更多
-        </el-button>
-        <el-text v-else type="success" size="small">已全部加载</el-text>
+        <el-text v-if="!hasMore" type="success" size="small">已全部加载</el-text>
+        <el-text v-else-if="!loadingMore" type="info" size="small">下滑加载更多</el-text>
       </div>
     </div>
   </el-card>
@@ -189,10 +214,20 @@ defineExpose({ refresh: loadFirstPage })
   font-weight: 700;
 }
 
-.list-wrap {
-  max-height: min(420px, 50vh);
+.list-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.list-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
+  overscroll-behavior: contain;
 }
 
 .list {
@@ -264,17 +299,24 @@ defineExpose({ refresh: loadFirstPage })
   font-weight: 600;
 }
 
+.load-sentinel {
+  height: 1px;
+}
+
+.load-hint {
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
 .list-footer {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
-  padding: 12px 4px 4px;
-  margin-top: 4px;
+  flex-shrink: 0;
+  padding: 10px 4px 2px;
   border-top: 1px dashed var(--el-border-color-lighter);
-  position: sticky;
-  bottom: 0;
-  background: linear-gradient(to top, var(--el-fill-color-blank) 80%, transparent);
+  background: var(--el-fill-color-blank);
 }
 </style>
