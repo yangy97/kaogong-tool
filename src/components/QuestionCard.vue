@@ -24,7 +24,7 @@ const diffType: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
 <template>
   <el-card class="question-card" shadow="never">
     <div class="question-head">
-      <el-tag type="danger" effect="dark" round>#{{ index + 1 }}</el-tag>
+      <el-tag type="primary" effect="dark" round>#{{ index + 1 }}</el-tag>
       <el-tag v-if="question.expertTag" type="warning" size="small">
         {{ question.expertTag }}解析
       </el-tag>

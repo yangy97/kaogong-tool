@@ -63,7 +63,7 @@ const emit = defineEmits<{
   padding: 8px 16px;
   border-radius: var(--ui-radius-pill, 20px);
   border: 1px solid var(--ui-border, #eee);
-  background: #fff;
+  background: var(--surface-muted, var(--surface));
   font-size: 13px;
   color: var(--text);
   cursor: pointer;
@@ -72,15 +72,21 @@ const emit = defineEmits<{
 }
 
 .topic-chip:hover {
-  border-color: var(--el-color-primary-light-5);
-  color: var(--el-color-primary);
+  border-color: var(--surface-active-border, var(--el-color-primary-light-5));
+  color: var(--accent-label, var(--el-color-primary));
 }
 
 .topic-chip.active {
-  background: var(--el-color-primary);
-  border-color: var(--el-color-primary);
-  color: #fff;
+  background: var(--chip-active-bg, var(--el-color-primary));
+  border-color: var(--chip-active-border, var(--el-color-primary));
+  color: var(--chip-active-text, #fff);
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(255, 36, 66, 0.25);
+  box-shadow: var(--chip-active-shadow, 0 2px 8px rgba(255, 36, 66, 0.25));
+}
+
+@media (max-width: 400px) {
+  .topic-chip {
+    padding: 8px 12px;
+  }
 }
 </style>

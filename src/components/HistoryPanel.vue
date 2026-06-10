@@ -140,7 +140,7 @@ defineExpose({ refresh: loadFirstPage })
             <div class="item-info">
               <div class="item-title">
                 <el-tag size="small" effect="plain">{{ item.postDate }}</el-tag>
-                <el-tag size="small" type="danger" effect="plain">{{ item.moduleName }}</el-tag>
+                <el-tag size="small" type="primary" effect="plain">{{ item.moduleName }}</el-tag>
                 <el-tag v-if="item.topicName" size="small" type="info" effect="plain">
                   {{ item.topicName }}
                 </el-tag>

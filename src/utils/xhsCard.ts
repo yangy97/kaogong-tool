@@ -53,41 +53,310 @@ const COVER_BRAND = '学行测'
 /** 抖音发布中心选封面时上下各裁约 12%，核心内容需落在中间 3:4 区域 */
 const DOUYIN_COVER_SAFE = { top: 260, bottom: 260 }
 
-/** 封面品牌「🐑🍊 学行测」字号与描边（白字黑边，html2canvas 用 text-shadow 模拟） */
-const COVER_BRAND_FONT = { douyin: 96, xhs: 82 } as const
-const COVER_BRAND_STROKE = 5
-
 /** 封面内容区整体下移（相对垂直居中/顶对齐的偏移） */
-const COVER_CONTENT_TOP = { douyin: 800, xhs: 200 } as const
+const COVER_CONTENT_TOP = { douyin: 680, xhs: 160 } as const
 
-/** 封面顶部品牌字描边（html2canvas 兼容） */
-function coverBrandTextShadow(stroke = COVER_BRAND_STROKE): string {
-  const shadows: string[] = []
-  for (let dx = -stroke; dx <= stroke; dx++) {
-    for (let dy = -stroke; dy <= stroke; dy++) {
-      if (dx !== 0 || dy !== 0) shadows.push(`${dx}px ${dy}px 0 #000`)
-    }
+/** 稳重感描边：深色薄阴影，避免花哨渐变字 */
+function coverTextDepth(shadow = '0 4px 0 rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.22)'): string {
+  return shadow
+}
+
+const IP_MASCOT_CORNER = '/ip-mascot-corner.png'
+
+/** 封面：PNG 抠图叠在卡片左缘，光晕 + 底部渐隐，无白底框 */
+function renderCoverMascotOverlay(platform: ImagePlatform): string {
+  const width = platform === 'douyin' ? 520 : 480
+  const left = platform === 'douyin' ? -32 : -36
+  const bottom = platform === 'douyin' ? 28 : 32
+  const glow =
+    platform === 'douyin'
+      ? 'radial-gradient(circle at 50% 78%, rgba(0,242,234,0.24) 0%, transparent 62%)'
+      : 'radial-gradient(circle at 50% 78%, rgba(255,255,255,0.32) 0%, transparent 62%)'
+
+  return `
+    <div style="
+      position:absolute;
+      left:${left}px;
+      bottom:${bottom}px;
+      width:${width}px;
+      z-index:4;
+      pointer-events:none;
+      line-height:0;
+    ">
+      <div style="
+        position:absolute;
+        inset:-10% -8% -6%;
+        background:${glow};
+        border-radius:50%;
+      "></div>
+      <div style="
+        position:relative;
+        filter:drop-shadow(0 16px 36px rgba(0,0,0,${platform === 'douyin' ? '0.38' : '0.2'}));
+        -webkit-mask-image:linear-gradient(to top, transparent 0%, #000 8%);
+        mask-image:linear-gradient(to top, transparent 0%, #000 8%);
+      ">
+        <img
+          src="${IP_MASCOT_CORNER}"
+          alt=""
+          crossorigin="anonymous"
+          style="width:100%;height:auto;display:block;"
+        />
+      </div>
+    </div>
+  `
+}
+
+/** 题目/解析卡：右下角 PNG 点缀，渐隐融入背景 */
+function renderCardMascotCorner(platform: ImagePlatform): string {
+  const width = platform === 'douyin' ? 300 : 280
+  return `
+    <div style="
+      position:absolute;
+      right:-24px;
+      bottom:4px;
+      width:${width}px;
+      opacity:${platform === 'douyin' ? '0.85' : '0.76'};
+      pointer-events:none;
+      z-index:1;
+      line-height:0;
+    ">
+      <div style="
+        filter:drop-shadow(0 8px 18px rgba(0,0,0,${platform === 'douyin' ? '0.24' : '0.08'}));
+        -webkit-mask-image:linear-gradient(135deg, transparent 4%, #000 32%, #000 90%, transparent 100%);
+        mask-image:linear-gradient(135deg, transparent 4%, #000 32%, #000 90%, transparent 100%);
+      ">
+        <img
+          src="${IP_MASCOT_CORNER}"
+          alt=""
+          crossorigin="anonymous"
+          style="width:100%;height:auto;display:block;"
+        />
+      </div>
+    </div>
+  `
+}
+
+async function waitForImages(el: HTMLElement): Promise<void> {
+  const imgs = [...el.querySelectorAll('img')]
+  if (imgs.length === 0) return
+  await Promise.all(
+    imgs.map(
+      (img) =>
+        new Promise<void>((resolve, reject) => {
+          if (img.complete && img.naturalWidth > 0) {
+            resolve()
+            return
+          }
+          img.onload = () => resolve()
+          img.onerror = () => reject(new Error('配图资源加载失败'))
+        }),
+    ),
+  )
+}
+
+interface CoverContent {
+  moduleName: string
+  topicName?: string
+  count: number
+}
+
+function parseCoverContent(questions: Question[]): CoverContent {
+  return {
+    moduleName: questions[0]?.moduleName ?? '考公刷题',
+    topicName: questions[0]?.topicName,
+    count: questions.length,
   }
-  return shadows.join(', ')
+}
+
+/** 封面装饰背景（纯 CSS，html2canvas 兼容） */
+function renderCoverDecorations(platform: ImagePlatform): string {
+  if (platform === 'xhs') {
+    return `
+      <div style="position:absolute;inset:0;overflow:hidden;pointer-events:none;">
+        <div style="position:absolute;top:-120px;right:-100px;width:480px;height:480px;border-radius:50%;background:rgba(255,255,255,0.12);"></div>
+        <div style="position:absolute;bottom:80px;left:-140px;width:420px;height:420px;border-radius:50%;background:rgba(255,255,255,0.08);"></div>
+        <div style="position:absolute;top:420px;right:60px;width:180px;height:180px;border-radius:50%;border:3px solid rgba(255,255,255,0.18);"></div>
+        <div style="position:absolute;inset:0;background:radial-gradient(circle at 20% 80%,rgba(255,255,255,0.08) 0%,transparent 45%),radial-gradient(circle at 85% 15%,rgba(255,255,255,0.1) 0%,transparent 40%);"></div>
+      </div>
+    `
+  }
+  return `
+    <div style="position:absolute;inset:0;overflow:hidden;pointer-events:none;">
+      <div style="position:absolute;inset:0;background:
+        linear-gradient(rgba(0,242,234,0.04) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(0,242,234,0.04) 1px,transparent 1px);
+        background-size:56px 56px;"></div>
+      <div style="position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(0,242,234,0.15) 0%,transparent 65%);"></div>
+      <div style="position:absolute;bottom:120px;right:-60px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(254,44,85,0.12) 0%,transparent 70%);"></div>
+      <div style="position:absolute;top:280px;left:40px;width:120px;height:120px;border:2px solid rgba(0,242,234,0.25);border-radius:16px;transform:rotate(12deg);"></div>
+      <div style="position:absolute;bottom:360px;right:80px;width:80px;height:80px;border:2px solid rgba(254,44,85,0.2);border-radius:50%;"></div>
+    </div>
+  `
 }
 
 function renderCoverBrandHeader(platform: ImagePlatform): string {
-  const fontSize = COVER_BRAND_FONT[platform]
-  const stroke = coverBrandTextShadow()
+  const fontSize = platform === 'douyin' ? 38 : 36
   return `
-    <div style="text-align:center;margin-bottom:28px;flex-shrink:0;">
-      <span style="display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1.15;">
-        <span style="font-size:${fontSize}px;line-height:1;">🐑🍊</span>
-        <span style="
-          font-size:${fontSize}px;
+    <div style="display:inline-flex;align-items:center;gap:10px;padding:10px 24px;background:rgba(0,0,0,${platform === 'xhs' ? '0.14' : '0.35'});border:1.5px solid rgba(255,255,255,0.28);border-radius:999px;flex-shrink:0;">
+      <span style="font-size:${fontSize + 2}px;line-height:1;">🐑🍊</span>
+      <span style="font-size:${fontSize}px;font-weight:800;letter-spacing:3px;color:#fff;">${COVER_BRAND}</span>
+    </div>
+  `
+}
+
+function renderCoverMainCard(
+  platform: ImagePlatform,
+  content: CoverContent,
+  cfg: (typeof PLATFORM_CONFIG)[ImagePlatform],
+): string {
+  const { moduleName, topicName, count } = content
+  const topicLine = topicName
+    ? `<div style="font-size:${platform === 'douyin' ? '30' : '28'}px;font-weight:600;opacity:0.88;margin-top:22px;letter-spacing:2px;">考点 · ${topicName}</div>`
+    : ''
+  const countColor = platform === 'douyin' ? cfg.accent : '#fff'
+  const countGlow =
+    platform === 'douyin'
+      ? `0 0 40px rgba(0,242,234,0.35), ${coverTextDepth('0 5px 0 rgba(0,0,0,0.45)')}`
+      : coverTextDepth('0 6px 0 rgba(160,20,40,0.35), 0 10px 30px rgba(0,0,0,0.2)')
+  const cardBg =
+    platform === 'xhs'
+      ? 'linear-gradient(165deg,rgba(255,255,255,0.24) 0%,rgba(255,255,255,0.12) 100%)'
+      : 'linear-gradient(165deg,rgba(255,255,255,0.1) 0%,rgba(255,255,255,0.04) 100%)'
+  const cardBorder = platform === 'xhs' ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.16)'
+  const accent2 = platform === 'douyin' ? (cfg as typeof PLATFORM_CONFIG.douyin).accent2 : '#ffd166'
+
+  const textPadLeft = platform === 'douyin' ? 320 : 280
+
+  return `
+    <div style="position:relative;width:100%;max-width:${platform === 'douyin' ? '980' : '940'}px;margin:0 auto;">
+      ${renderCoverMascotOverlay(platform)}
+      <div style="
+        position:relative;
+        z-index:3;
+        width:100%;
+        padding:${platform === 'douyin' ? '44px 36px 48px' : '40px 32px 44px'};
+        padding-left:${textPadLeft}px;
+        background:${cardBg};
+        border:3px solid ${cardBorder};
+        border-radius:36px;
+        box-shadow:0 24px 70px rgba(0,0,0,${platform === 'xhs' ? '0.16' : '0.42'});
+        box-sizing:border-box;
+        text-align:center;
+      ">
+        <div style="
+          font-size:${platform === 'douyin' ? '72' : '64'}px;
           font-weight:900;
-          font-family:-apple-system,'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif;
-          color:#fff;
+          line-height:1.12;
+          letter-spacing:${platform === 'douyin' ? '6' : '5'}px;
+          text-shadow:${coverTextDepth('0 6px 0 rgba(0,0,0,0.22), 0 12px 32px rgba(0,0,0,0.18)')};
+        ">${moduleName}</div>
+
+        <div style="
+          margin-top:${platform === 'douyin' ? '18' : '16'}px;
+          display:inline-block;
+          padding:6px 18px;
+          background:${platform === 'xhs' ? 'rgba(255,255,255,0.22)' : 'rgba(0,242,234,0.14)'};
+          border:1.5px solid ${platform === 'xhs' ? 'rgba(255,255,255,0.5)' : 'rgba(0,242,234,0.4)'};
+          border-radius:999px;
+          font-size:${platform === 'douyin' ? '24' : '22'}px;
+          font-weight:800;
           letter-spacing:3px;
-          text-shadow:${stroke};
-          -webkit-text-stroke:1px #000;
-        ">${COVER_BRAND}</span>
-      </span>
+        ">刷题精选</div>
+
+        <div style="
+          margin-top:${platform === 'douyin' ? '24' : '20'}px;
+          display:flex;
+          align-items:flex-end;
+          justify-content:center;
+          gap:${platform === 'douyin' ? '20' : '16'}px;
+          line-height:1;
+        ">
+          <span style="
+            font-size:${platform === 'douyin' ? '168' : '152'}px;
+            font-weight:900;
+            color:${countColor};
+            letter-spacing:-4px;
+            text-shadow:${countGlow};
+          ">${count}</span>
+          <div style="display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;gap:${platform === 'douyin' ? '8' : '6'}px;padding-bottom:${platform === 'douyin' ? '24' : '20'}px;">
+            <span style="font-size:${platform === 'douyin' ? '42' : '38'}px;font-weight:900;letter-spacing:2px;text-shadow:${coverTextDepth('0 3px 0 rgba(0,0,0,0.2)')};">道</span>
+            <span style="font-size:${platform === 'douyin' ? '42' : '38'}px;font-weight:900;letter-spacing:2px;text-shadow:${coverTextDepth('0 3px 0 rgba(0,0,0,0.2)')};">精</span>
+            <span style="font-size:${platform === 'douyin' ? '42' : '38'}px;font-weight:900;letter-spacing:2px;text-shadow:${coverTextDepth('0 3px 0 rgba(0,0,0,0.2)')};">选</span>
+          </div>
+        </div>
+
+        ${topicLine}
+
+        <div style="
+          margin:${platform === 'douyin' ? '28' : '24'}px auto 0;
+          height:4px;
+          width:100px;
+          background:${platform === 'douyin' ? `linear-gradient(90deg,${cfg.accent},${accent2})` : 'rgba(255,255,255,0.65)'};
+          border-radius:2px;
+        "></div>
+
+        <div style="
+          margin-top:${platform === 'douyin' ? '20' : '18'}px;
+          font-size:${platform === 'douyin' ? '28' : '26'}px;
+          font-weight:800;
+          letter-spacing:3px;
+          text-shadow:${coverTextDepth('0 2px 0 rgba(0,0,0,0.15)')};
+        ">今日打卡</div>
+
+        <div style="
+          margin-top:${platform === 'douyin' ? '14' : '12'}px;
+          font-size:${platform === 'douyin' ? '24' : '26'}px;
+          font-weight:500;
+          opacity:0.72;
+          letter-spacing:2px;
+          line-height:1.5;
+        ">坚持练习 · 稳步提升</div>
+      </div>
+    </div>
+  `
+}
+
+function renderCoverFooterBadge(platform: ImagePlatform, badge: string): string {
+  const accent = PLATFORM_CONFIG[platform].accent
+  if (platform === 'xhs') {
+    return `
+      <div style="margin-top:36px;display:inline-flex;align-items:center;gap:10px;padding:14px 32px;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.35);border-radius:999px;font-size:26px;font-weight:600;">
+        ${badge}
+      </div>
+    `
+  }
+  return `
+    <div style="margin-top:32px;display:inline-flex;align-items:center;gap:10px;padding:14px 32px;border:2px solid ${accent};border-radius:999px;font-size:24px;color:${accent};font-weight:600;background:rgba(0,242,234,0.08);">
+      ${badge}
+    </div>
+  `
+}
+
+function renderCoverLayout(platform: ImagePlatform, content: CoverContent): string {
+  const cfg = PLATFORM_CONFIG[platform]
+  const decorations = renderCoverDecorations(platform)
+  const brand = renderCoverBrandHeader(platform)
+  const mainCard = renderCoverMainCard(platform, content, cfg)
+  const footer = renderCoverFooterBadge(platform, cfg.coverBadge)
+
+  if (platform === 'douyin') {
+    const coverPad = `padding:${COVER_CONTENT_TOP.douyin}px 32px ${DOUYIN_COVER_SAFE.bottom}px`
+    return `
+      ${decorations}
+      <div style="position:relative;z-index:3;flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;${coverPad};box-sizing:border-box;">
+        ${brand}
+        <div style="margin-top:24px;width:100%;">${mainCard}</div>
+        ${footer}
+      </div>
+    `
+  }
+
+  return `
+    ${decorations}
+    <div style="position:relative;z-index:3;flex:1;display:flex;flex-direction:column;height:100%;padding-top:${COVER_CONTENT_TOP.xhs}px;box-sizing:border-box;align-items:center;text-align:center;">
+      ${brand}
+      <div style="margin-top:28px;width:100%;padding:0 24px;box-sizing:border-box;">${mainCard}</div>
+      <div style="margin-top:auto;margin-bottom:48px;">${footer.replace('margin-top:36px', 'margin-top:0')}</div>
     </div>
   `
 }
@@ -101,6 +370,7 @@ function createCardElement(
     theme?: 'cover' | 'question' | 'answer'
     index?: number
     contentHtml?: string
+    coverContent?: CoverContent
   },
 ): HTMLDivElement {
   const cfg = PLATFORM_CONFIG[platform]
@@ -131,44 +401,27 @@ function createCardElement(
   `
 
   if (isCover) {
-    if (platform === 'douyin') {
-      const coverPad = `padding:${COVER_CONTENT_TOP.douyin}px 48px ${DOUYIN_COVER_SAFE.bottom}px`
-      el.innerHTML = `
-        <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;${coverPad};box-sizing:border-box;">
-          ${renderCoverBrandHeader(platform)}
-          <div style="width:120px;height:5px;background:${cfg.accent};border-radius:3px;margin:20px auto 24px;opacity:0.9;"></div>
-          <div style="font-size:64px;font-weight:900;line-height:1.2;margin-bottom:16px;letter-spacing:1px;">${options.title}</div>
-          <div style="font-size:34px;opacity:0.88;font-weight:500;margin-bottom:32px;">${options.subtitle ?? ''}</div>
-          <div style="font-size:26px;opacity:0.9;padding:14px 36px;border:2px solid ${cfg.accent};border-radius:40px;color:${cfg.accent};">
-            ${cfg.coverBadge}
-          </div>
-        </div>
-      `
-    } else {
-      el.innerHTML = `
-        <div style="flex:1;display:flex;flex-direction:column;height:100%;padding-top:${COVER_CONTENT_TOP.xhs}px;box-sizing:border-box;">
-          ${renderCoverBrandHeader(platform)}
-          <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;padding-top:48px;">
-            <div style="font-size:80px;font-weight:900;line-height:1.2;margin-bottom:20px;letter-spacing:1px;">${options.title}</div>
-            <div style="font-size:40px;opacity:0.88;font-weight:500;">${options.subtitle ?? ''}</div>
-            <div style="margin-top:auto;margin-bottom:48px;font-size:28px;opacity:0.85;padding:16px 40px;border:2px solid rgba(255,255,255,0.6);border-radius:40px;">
-              ${cfg.coverBadge}
-            </div>
-          </div>
-        </div>
-      `
+    const coverContent = options.coverContent ?? {
+      moduleName: options.subtitle ?? '考公刷题',
+      count: 3,
     }
+    el.style.overflow = 'hidden'
+    el.innerHTML = renderCoverLayout(platform, coverContent)
   } else {
     const badge = options.index != null ? `第 ${options.index + 1} 题` : '解析'
     const accent2 = platform === 'douyin' ? (cfg as typeof PLATFORM_CONFIG.douyin).accent2 : cfg.accent
     const bodyContent = options.contentHtml ?? content.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const bodyPad = platform === 'douyin' ? 'padding-right:248px;' : 'padding-right:228px;'
     const bodyStyle = options.contentHtml
-      ? 'flex:1;font-size:28px;line-height:1.8;overflow:hidden;'
-      : 'flex:1;font-size:' + (platform === 'douyin' ? '32' : '30') + 'px;line-height:1.8;white-space:pre-wrap;overflow:hidden;'
+      ? `flex:1;font-size:28px;line-height:1.8;overflow:hidden;min-height:0;${bodyPad}`
+      : `flex:1;font-size:${platform === 'douyin' ? '32' : '30'}px;line-height:1.8;white-space:pre-wrap;overflow:hidden;min-height:0;${bodyPad}`
     el.innerHTML = `
       <div style="font-size:28px;color:${cfg.accent};font-weight:600;margin-bottom:16px;">${badge}</div>
       <div style="font-size:32px;font-weight:700;color:${accent2};margin-bottom:24px;">${options.title}</div>
-      <div style="${bodyStyle}">${bodyContent}</div>
+      <div style="position:relative;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;">
+        <div style="${bodyStyle}">${bodyContent}</div>
+        ${renderCardMascotCorner(platform)}
+      </div>
       <div style="font-size:24px;color:${cfg.footerColor};text-align:center;margin-top:24px;">${cfg.footer}</div>
     `
   }
@@ -182,6 +435,7 @@ async function renderToBlob(
   platform: ImagePlatform,
 ): Promise<Blob> {
   const cfg = PLATFORM_CONFIG[platform]
+  await waitForImages(el)
   const canvas = await html2canvas(el, {
     scale: 1,
     useCORS: true,
@@ -439,8 +693,8 @@ export async function generatePlatformImages(
   const coverBlob = await renderToBlob(
     createCardElement('', platform, {
       title: buildCoverTitle(questions, platform),
-      subtitle: questions[0]?.moduleName ?? '考公刷题',
       theme: 'cover',
+      coverContent: parseCoverContent(questions),
     }),
     platform,
   )

@@ -95,6 +95,9 @@ let generateAbort: AbortController | null = null
 let generateRunId = 0
 const cancelRequested = ref(false)
 const showCancelBtn = ref(false)
+const imageGalleryKey = computed(
+  () => `${loadedHistoryId.value ?? ''}-${questionSetId.value ?? ''}-${questions.value.length}`,
+)
 
 function isAbortError(err: unknown): boolean {
   return (err instanceof DOMException || err instanceof Error) && (err as Error).name === 'AbortError'
@@ -125,7 +128,12 @@ function setLoading(msg: string, sub = '') {
   loadingSubMessage.value = sub
 }
 
+let imageLoadGen = 0
+
 function clearImageCache() {
+  imageLoadGen++
+  imageLoading.value = false
+  loadingPlatform.value = null
   revokeImageUrls(xhsImages.value)
   revokeImageUrls(douyinImages.value)
   xhsImages.value = []
@@ -475,7 +483,7 @@ async function handleVocabWebSearch(keyword: string) {
   }
 }
 
-async function ensureImages(platform: ImagePlatform): Promise<GeneratedImage[]> {
+async function ensureImages(platform: ImagePlatform, gen = imageLoadGen): Promise<GeneratedImage[]> {
   if (!post.value || !questions.value.length) {
     throw new Error('请先生成题目')
   }
@@ -498,31 +506,43 @@ async function ensureImages(platform: ImagePlatform): Promise<GeneratedImage[]> 
     answerDate,
     includeTodayAnswers: includeTodayAnswers.value,
   })
-    const date = new Date().toISOString().slice(0, 10)
-    if (platform === 'xhs') {
-      xhsImages.value = generated
-      xhsZipName.value = `考公小红书配图-${date}.zip`
-    } else {
-      douyinImages.value = generated
-      douyinZipName.value = `考公抖音配图-${date}.zip`
-    }
-    return generated
+
+  if (gen !== imageLoadGen) {
+    revokeImageUrls(generated)
+    return []
+  }
+
+  const date = new Date().toISOString().slice(0, 10)
+  if (platform === 'xhs') {
+    xhsImages.value = generated
+    xhsZipName.value = `考公小红书配图-${date}.zip`
+  } else {
+    douyinImages.value = generated
+    douyinZipName.value = `考公抖音配图-${date}.zip`
+  }
+  return generated
 }
 
 async function handleNeedPlatformImages(platform: ImagePlatform) {
   if (!post.value || !questions.value.length) return
   const cache = platform === 'xhs' ? xhsImages : douyinImages
-  if (cache.value.length || imageLoading.value) return
+  if (cache.value.length) return
+  if (imageLoading.value && loadingPlatform.value === platform) return
 
+  const gen = imageLoadGen
   imageLoading.value = true
   loadingPlatform.value = platform
   try {
-    await ensureImages(platform)
+    await ensureImages(platform, gen)
   } catch (err) {
-    showToast(err instanceof Error ? err.message : '配图生成失败')
+    if (gen === imageLoadGen) {
+      showToast(err instanceof Error ? err.message : '配图生成失败')
+    }
   } finally {
-    imageLoading.value = false
-    loadingPlatform.value = null
+    if (gen === imageLoadGen) {
+      imageLoading.value = false
+      loadingPlatform.value = null
+    }
   }
 }
 
@@ -677,7 +697,9 @@ async function handleHistoryLoaded(items: QuestionSetSummary[]) {
     <el-header class="header" height="auto">
       <div class="header-inner">
         <div class="brand">
-          <el-avatar class="logo" :size="48" shape="square">公</el-avatar>
+          <div class="logo-mark">
+            <img src="/favicon.svg" alt="" class="logo-img" />
+          </div>
           <div>
             <h1>考公助手</h1>
             <el-text type="info">自动生成题目 · 一键发布小红书 / 抖音</el-text>
@@ -840,7 +862,7 @@ async function handleHistoryLoaded(items: QuestionSetSummary[]) {
                     <el-tag v-if="loadedHistoryId" type="info" effect="plain" round>
                       历史 #{{ loadedHistoryId }}
                     </el-tag>
-                    <el-tag v-if="sourceLabel" type="danger" effect="plain" round>
+                    <el-tag v-if="sourceLabel" type="primary" effect="plain" round>
                       {{ sourceLabel }}
                     </el-tag>
                   </div>
@@ -875,6 +897,7 @@ async function handleHistoryLoaded(items: QuestionSetSummary[]) {
             </div>
             <ImageGallery
               v-if="post"
+              :key="imageGalleryKey"
               :xhs-images="xhsImages"
               :douyin-images="douyinImages"
               :xhs-zip-name="xhsZipName"
@@ -925,7 +948,7 @@ async function handleHistoryLoaded(items: QuestionSetSummary[]) {
                 <el-tag v-if="loadedHistoryId" type="info" effect="plain" round>
                   历史 #{{ loadedHistoryId }}
                 </el-tag>
-                <el-tag v-if="sourceLabel" type="danger" effect="plain" round>
+                <el-tag v-if="sourceLabel" type="primary" effect="plain" round>
                   {{ sourceLabel }}
                 </el-tag>
               </div>
@@ -960,6 +983,7 @@ async function handleHistoryLoaded(items: QuestionSetSummary[]) {
         </div>
         <ImageGallery
           v-if="post"
+          :key="imageGalleryKey"
           :xhs-images="xhsImages"
           :douyin-images="douyinImages"
           :xhs-zip-name="xhsZipName"
@@ -1015,12 +1039,20 @@ async function handleHistoryLoaded(items: QuestionSetSummary[]) {
   gap: 14px;
 }
 
-.logo {
-  background: var(--el-color-primary) !important;
-  color: #fff;
-  font-size: 22px;
-  font-weight: 800;
+.logo-mark {
+  width: 48px;
+  height: 48px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo-img {
+  width: 40px;
+  height: 40px;
+  display: block;
+  object-fit: contain;
 }
 
 h1 {
@@ -1055,10 +1087,10 @@ h1 {
 .page-shell {
   width: 100%;
   margin-bottom: 24px;
-  background: #fff;
+  background: var(--card);
   border: 1px solid var(--ui-border, #e8e8ec);
   border-radius: var(--ui-radius, 12px);
-  box-shadow: var(--ui-shadow);
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 

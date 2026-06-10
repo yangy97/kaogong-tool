@@ -89,13 +89,13 @@
   border-radius: 10px !important;
 }
 
-/* Tab 栏：与下方内容同宽、同色白底 */
+/* Tab 栏：与下方内容同宽 */
 .tabs-bar-wrap {
   display: block;
   width: 100%;
   box-sizing: border-box;
   padding: 4px 16px 0;
-  background: #fff;
+  background: var(--card);
   border-bottom: 1px solid var(--ui-border, #e8e8ec);
 }
 
@@ -103,7 +103,7 @@
 .el-card .tabs-bar-wrap {
   margin: 0 0 16px;
   padding: 4px 12px 0;
-  background: #fff;
+  background: var(--card);
   border: none;
   border-bottom: 1px solid var(--ui-border, #e8e8ec);
   border-radius: 8px;

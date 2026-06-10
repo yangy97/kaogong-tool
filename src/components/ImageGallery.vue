@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { GeneratedImage, ImagePlatform } from '@/utils/xhsCard'
 import { getPlatformLabel } from '@/utils/xhsCard'
 
@@ -41,30 +41,38 @@ const pathHint = computed(() =>
     : '在抖音创作中心「发布图文」上传',
 )
 
-function selectTab(id: ImagePlatform) {
-  activeTab.value = id
-  const hasImages = id === 'xhs' ? props.xhsImages.length : props.douyinImages.length
-  if (!hasImages) {
-    emit('needImages', id)
+const isActiveTabLoading = computed(
+  () => !!props.imageLoading && props.loadingPlatform === activeTab.value,
+)
+
+function requestImagesIfNeeded(platform: ImagePlatform = activeTab.value) {
+  const hasImages = platform === 'xhs' ? props.xhsImages.length : props.douyinImages.length
+  if (!hasImages && !(props.imageLoading && props.loadingPlatform === platform)) {
+    emit('needImages', platform)
   }
 }
 
+function selectTab(id: ImagePlatform) {
+  activeTab.value = id
+  requestImagesIfNeeded(id)
+}
+
+onMounted(() => {
+  requestImagesIfNeeded('xhs')
+})
+
 watch(
-  () => props.xhsImages.length,
-  (len) => {
-    if (len && !props.douyinImages.length && activeTab.value === 'douyin') {
-      emit('needImages', 'douyin')
+  () => [props.xhsImages.length, props.douyinImages.length] as const,
+  () => {
+    if (!activeImages.value.length) {
+      requestImagesIfNeeded(activeTab.value)
     }
   },
 )
 </script>
 
 <template>
-  <el-card
-    v-if="xhsImages.length || douyinImages.length || imageLoading"
-    class="gallery"
-    shadow="never"
-  >
+  <el-card class="gallery" shadow="never">
     <template #header>
       <div class="gallery-head">
         <span>🖼️ 配图预览</span>
@@ -89,7 +97,7 @@ watch(
       </el-tabs>
     </div>
 
-    <div v-if="imageLoading && loadingPlatform === activeTab" class="loading-tab">
+    <div v-if="isActiveTabLoading" class="loading-tab">
       <el-skeleton :rows="2" animated />
       <el-text type="info">正在生成{{ getPlatformLabel(activeTab) }}配图…</el-text>
     </div>
@@ -144,6 +152,14 @@ watch(
         </el-col>
       </el-row>
     </template>
+
+    <div v-else class="empty-tab">
+      <el-empty description="当前平台配图尚未生成" :image-size="72">
+        <el-button type="primary" @click="requestImagesIfNeeded(activeTab)">
+          生成{{ getPlatformLabel(activeTab) }}预览
+        </el-button>
+      </el-empty>
+    </div>
   </el-card>
 </template>
 
@@ -220,7 +236,8 @@ watch(
   gap: 8px;
 }
 
-.loading-tab {
+.loading-tab,
+.empty-tab {
   text-align: center;
   padding: 32px 20px;
 }

@@ -16,6 +16,18 @@
   --card: #fff;
   --radius: 12px;
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --ui-border: #e8e8ec;
+  --ui-shadow-hover: 0 4px 16px rgba(255, 36, 66, 0.12);
+  --surface: #fff;
+  --surface-muted: #fafafa;
+  --surface-active-bg: var(--el-color-primary-light-9);
+  --surface-active-border: var(--el-color-primary);
+  --surface-active-shadow: 0 4px 16px rgba(255, 36, 66, 0.15);
+  --chip-active-bg: var(--el-color-primary);
+  --chip-active-text: #fff;
+  --chip-active-border: var(--el-color-primary);
+  --chip-active-shadow: 0 2px 8px rgba(255, 36, 66, 0.25);
+  --accent-label: var(--el-color-primary);
 
   /* Element Plus 主题（小红书红） */
   --el-color-primary: #ff2442;
@@ -42,7 +54,6 @@ body {
   min-height: 100vh;
 }
 
-/* 移动端：表单项、按钮更易点 */
 @media (max-width: 768px) {
   .el-button {
     min-height: 36px;
